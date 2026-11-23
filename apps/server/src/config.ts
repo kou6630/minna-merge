@@ -14,6 +14,8 @@ export type Config = {
   pagesUrl: string;
   /** サーバーの今の住所を書く Gist（初回に自動で作る） */
   gistId?: string;
+  /** 自分用リンクの鍵（「ひとりで練習」を使えるようにする。友達には教えない） */
+  ownerKey?: string;
 };
 
 const DEFAULTS = {
@@ -38,6 +40,7 @@ export async function loadConfig(path: string): Promise<Config> {
       allowedOrigins: c.allowedOrigins ?? DEFAULTS.allowedOrigins,
       pagesUrl: c.pagesUrl ?? DEFAULTS.pagesUrl,
       gistId: c.gistId,
+      ownerKey: c.ownerKey,
     };
     if (!full.password) throw new Error(`${path} の password（合言葉）が空です`);
     return full;

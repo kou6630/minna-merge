@@ -3,6 +3,7 @@ import type { ServerInfo } from '@minna/shared';
 import type { Conn } from './conn.ts';
 import { RemoteServer, probe } from './remote.ts';
 import { parseServerInput, resolveGist } from './server-code.ts';
+import { isOwnerBrowser, isOwnerKey, markOwnerBrowser } from './owner.ts';
 
 /** 一覧の1行。gist（サーバーコード）か address（直接アドレス）のどちらか */
 type Entry = { address?: string; gist?: string; id?: string; name?: string };
@@ -66,6 +67,11 @@ export class Title {
     });
     this.render();
 
+    // 「ひとりで練習」は持ち主のブラウザだけ（開発中の localhost では常に出す）
+    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+    $('solo').hidden = !(local || isOwnerBrowser());
+    void this.checkOwnerLink();
+
     // 招待リンク（?join=サーバーコード）で開かれたら、一覧に足してそのまま入る
     const params = new URLSearchParams(location.search);
     const join = params.get('join');
@@ -82,7 +88,24 @@ export class Title {
     }
   }
 
-  private addEntry(ref: { gist: string } | { address: string }): Entry {
+  /** 自分用リンク（?owner=鍵）で開かれたら、このブラウザで「ひとりで練習」を使えるようにする */
+  private async checkOwnerLink() {
+    const params = new URLSearchParams(location.search);
+    const key = params.get('owner');
+    if (!key) return;
+    params.delete('owner');
+    const q = params.toString();
+    history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash);
+    if (await isOwnerKey(key)) {
+      markOwnerBrowser();
+      $('solo').hidden = false;
+      this.msg('このブラウザで「ひとりで練習」が使えるようになりました');
+    } else {
+      this.msg('自分用リンクがちがいます');
+    }
+  }
+
+    private addEntry(ref: { gist: string } | { address: string }): Entry {
     const found = this.servers.find((s) => ('gist' in ref ? s.gist === ref.gist : s.address === ref.address));
     if (found) return found;
     const entry: Entry = { ...ref };

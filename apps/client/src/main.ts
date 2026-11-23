@@ -56,6 +56,14 @@ async function boot(conn: Conn) {
 
   new Minimap(document.getElementById('minimap') as HTMLCanvasElement, board, conn);
 
+  // タイトルへ（ページを読み込み直す。サーバーとのつながりも切れる）
+  const toTitle = $('toTitle');
+  toTitle.hidden = false;
+  toTitle.addEventListener('click', () => {
+    if (conn instanceof LocalServer) conn.save();
+    location.href = location.pathname;
+  });
+
   hud.onSell = (it) => {
     if (conn.send({ t: 'sell', item: it.id })) {
       board.select(-1);

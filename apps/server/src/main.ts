@@ -30,6 +30,11 @@ console.log('');
 console.log('  ★ この黒い画面を閉じると、サーバーが止まります（遊んでいる間は開いたままにしてください）');
 console.log('     止めるときは、Ctrl+C を2回続けて押すか、画面を閉じてください');
 console.log('');
+if (cfg.ownerKey) {
+  console.log('  自分用リンク（開いたブラウザで「ひとりで練習」が使えるようになる。友達には送らないでください）');
+  console.log(`     ${cfg.pagesUrl}?owner=${cfg.ownerKey}`);
+  console.log('');
+}
 
 let tunnel: Tunnel | null = null;
 let gistOk = false;

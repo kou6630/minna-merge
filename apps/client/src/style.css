@@ -252,3 +252,14 @@ html, body {
 @media (max-width: 560px) {
   .minimap { width: 84px; height: 84px; top: 56px; }
 }
+
+/* ゲーム中の「タイトルへ」 */
+.to-title {
+  position: fixed; top: 10px; left: 10px; z-index: 6;
+  font: inherit; font-weight: 800; font-size: 13px; color: var(--ink);
+  background: var(--cream); border: 3px solid var(--ink); border-radius: 999px; box-shadow: var(--shadow);
+  padding: 4px 12px; cursor: pointer;
+}
+@media (max-width: 560px) {
+  .to-title { top: auto; bottom: 120px; left: 8px; font-size: 12px; padding: 3px 10px; }
+}
