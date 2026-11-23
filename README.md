@@ -1,9 +1,22 @@
 # みんなでマージ
 
-商店街を舞台にしたマージゲーム。100×100マスの盤面を友達みんなで共有して遊ぶ（予定）。
-設計は [設計.md](設計.md)。
+商店街を舞台にしたマージゲーム。100×100マスの盤面を友達みんなで共有して遊ぶ。
+設計は [設計.md](設計.md)。ゲーム画面: https://kou6630.github.io/minna-merge/
 
-## いまできること（P3: みんなの依頼と区画の開放まで）
+## 友達と遊ぶ（サーバーを立てる人）
+
+1. `サーバー起動.bat` をダブルクリック。初回だけ、サーバーの名前と合言葉を聞かれる（`config.json` に保存）。
+2. 黒い画面に「★ 友達にはこの招待リンクを送ってください」と出る。そのリンクと合言葉を友達に送る。
+   リンクはずっと同じ（裏で GitHub のシークレット Gist に今の住所を書いている）。
+3. 友達はリンクを開いて、初回だけ名前と合言葉を入れる。2回目からはゲーム画面を開いて、一覧から選ぶだけ。
+4. やめるときは黒い画面で Ctrl+C か、画面を閉じる（保存してから止まる）。
+
+- 外からの接続は Cloudflare の一時トンネル（`tools/bin/cloudflared.exe`、アカウント不要）。無い場合は
+  `gh release download -R cloudflare/cloudflared -p cloudflared-windows-amd64.exe -D tools/bin` で入れて `cloudflared.exe` に名前を変える。
+- GitHub CLI（`gh`）にログインしていないと招待リンクは作れない。そのときは画面に出る直接アドレス（`wss://…`）を送る。
+- ゲーム画面は `main` に push すると GitHub Actions がテストしてから GitHub Pages に公開する（`.github/workflows/pages.yml`）。
+
+## いまできること（P4: 公開まで）
 
 - `サーバー起動.bat` をダブルクリックするとサーバーが立つ。初回だけ、サーバーの名前と合言葉を聞かれる（`config.json` に保存）。
 - ゲーム画面のタイトルにサーバー一覧が出る（オンラインかどうか・人数）。「入る」で、初回は名前と合言葉、2回目からは選ぶだけで入れる。
@@ -11,7 +24,7 @@
 - 通信が切れても、自動でつなぎ直す。盤面と全員の進み具合は `save/world.json` に2秒ごとと終了時に保存する。
 - 「ひとりで練習」で、サーバーなしでも遊べる（ブラウザに保存）。
 
-外のPCから入れるようにするのは P4（トンネルと GitHub Pages）。
+- タイトルのサーバー一覧には、招待リンク・サーバーコード・直接アドレスのどれでも追加できる。
 
 ### 遊び方
 
@@ -59,7 +72,9 @@ python -P tools/assets/slice.py               # 切り出して apps/client/publ
 | `apps/server/src/` | サーバー（`room.ts` が本体、`main.ts` が起動） |
 | `apps/server/test/` | 2人同時の同期・つかみの取り合い・再接続・保存のテスト |
 | `apps/client/src/` | 画面（PixiJS）。`remote.ts` が通信、`local-server.ts` がひとりで練習、`title.ts` がサーバー一覧、`orders-ui.ts` が注文と倉庫、`minimap.ts` がミニマップ |
+| `apps/server/src/publish.ts` | トンネルを開き、住所を Gist に書く |
 | `tools/assets/` | 素材の生成（`gen.mjs`）と切り出し（`slice.py`） |
+| `tools/bots/run.ts` | ボットで負荷と盤面のずれを試す（`node tools/bots/run.ts ws://localhost:8787 <合言葉> 10 30`） |
 | `assets-src/raw/` | 生成したままのシート |
 
 試験用に設定とセーブを分けたいときは `MINNA_HOME=.dev-server npm run server`（`.dev-server/` に作る）。
