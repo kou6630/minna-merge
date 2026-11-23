@@ -118,8 +118,17 @@ export class RemoteServer implements Conn {
   private listeners: ServerListener[] = [];
   private retry = 0;
   private connected = false;
+  /**
+   * サーバーコードで入ったとき: つなぎ直す前に、今の住所を調べ直す。
+   * 文字列=今の住所 / null=止まっている / undefined=調べられなかった（前の住所のまま試す）
+   */
+  private resolveAddress?: () => Promise<string | null | undefined>;
 
-  static async connect(address: string, creds: (info: ServerInfo) => Creds | null): Promise<ConnectResult> {
+  static async connect(
+    address: string,
+    creds: (info: ServerInfo) => Creds | null,
+    resolveAddress?: () => Promise<string | null | undefined>,
+  ): Promise<ConnectResult> {
     let token: string | undefined;
     const hs = await handshake(address, (info) => {
       const c = creds(info);
@@ -128,6 +137,7 @@ export class RemoteServer implements Conn {
     });
     if (!hs.ok) return hs;
     const conn = new RemoteServer(address, hs, hs.token ?? token ?? '');
+    conn.resolveAddress = resolveAddress;
     return { ok: true, conn, info: hs.info, token: hs.token };
   }
 
@@ -275,18 +285,35 @@ export class RemoteServer implements Conn {
     for (const l of this.listeners) l.ops(ops, events);
   }
 
-  private lost() {
+  private status(text: string | null) {
+    for (const l of this.listeners) l.status?.(text);
+  }
+
+  /** つながりが切れた。少し待ってつなぎ直す（1秒・2秒・4秒…最大10秒） */
+  private lost(serverDown = false) {
     this.connected = false;
-    for (const l of this.listeners) l.status?.('つながりが切れました。つなぎ直しています…');
-    const wait = Math.min(10_000, 1000 * 2 ** this.retry++);
+    this.status(
+      serverDown || this.retry >= 3
+        ? 'サーバーが止まっているようです。サーバーを立てている人に確かめてください（動き出したら自動でつながります）'
+        : 'つながりが切れました。つなぎ直しています…',
+    );
+    // サーバーコードのときは GitHub に聞きに行くので、間をあける（GitHub は1時間に60回まで）
+    const cap = this.resolveAddress ? 60_000 : 10_000;
+    const wait = Math.min(cap, 1000 * 2 ** this.retry++);
     setTimeout(() => void this.reconnect(), wait);
   }
 
   private async reconnect() {
+    // サーバーを立て直すとトンネルの住所が変わるので、サーバーコードから調べ直す
+    if (this.resolveAddress) {
+      const addr = await this.resolveAddress();
+      if (addr === null) return this.lost(true);
+      if (addr) this.address = addr;
+    }
     const hs = await handshake(this.address, () => ({ token: this.token }));
     if (!hs.ok) {
       if (hs.reason === 'offline') return this.lost();
-      for (const l of this.listeners) l.status?.(`${hs.text}　タイトルにもどってください`);
+      this.status(`${hs.text}　タイトルにもどってください`);
       return;
     }
     this.attach(hs.ws);

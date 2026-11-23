@@ -104,6 +104,17 @@ export class Title {
     return g.online ? { address: g.url } : { address: null, offline: true };
   }
 
+  /** サーバーコードの行なら、つなぎ直すたびに住所を調べ直す関数を渡す */
+  private resolverFor(entry: Entry): (() => Promise<string | null | undefined>) | undefined {
+    const gist = entry.gist;
+    if (!gist) return undefined;
+    return async () => {
+      const g = await resolveGist(gist);
+      if (!g) return undefined; // 調べられなかった
+      return g.online ? g.url : null;
+    };
+  }
+
   private saveServers() {
     store(SERVERS_KEY, this.servers);
   }
@@ -188,10 +199,14 @@ export class Title {
       );
     }
     const address = where.address;
-    const r = await RemoteServer.connect(address, (info) => {
-      const t = this.tokens[info.id];
-      return t ? { token: t } : null;
-    });
+    const r = await RemoteServer.connect(
+      address,
+      (info) => {
+        const t = this.tokens[info.id];
+        return t ? { token: t } : null;
+      },
+      this.resolverFor(entry),
+    );
     this.busy = false;
     if (r.ok) {
       entry.id = r.info.id;
@@ -236,7 +251,7 @@ export class Title {
       return;
     }
     this.busy = true;
-    const r = await RemoteServer.connect(j.address, () => ({ name, password }));
+    const r = await RemoteServer.connect(j.address, () => ({ name, password }), this.resolverFor(j.entry));
     this.busy = false;
     if (!r.ok) {
       err.hidden = false;

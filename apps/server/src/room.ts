@@ -221,9 +221,10 @@ export class Room {
     this.dirty = true;
     c.playerId = acc.playerId;
     c.lastS = 0;
-    this.q.online = true;
     this.send(c, { t: 'joined', playerId: acc.playerId, token });
     this.welcome(c);
+    // 参加中の一覧は、この人を入れた形で次の差分と一緒に全員へ送る
+    this.q.online = true;
     this.log(`参加: ${acc.name}（${this.onlineIds().length}人）`);
   }
 

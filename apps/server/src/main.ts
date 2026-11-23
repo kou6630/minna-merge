@@ -4,6 +4,7 @@ import { join, dirname, resolve } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, saveConfig } from './config.ts';
+import { copyToClipboard, makeInterruptGuard } from './console.ts';
 import { ghReady, startTunnel, toWs, writeGist } from './publish.ts';
 import type { GistContent, Tunnel } from './publish.ts';
 import { Room } from './room.ts';
@@ -25,7 +26,9 @@ console.log('');
 console.log(`  みんなでマージ サーバー「${cfg.serverName}」を起動しました`);
 console.log(`  このPCから:   localhost:${port}`);
 console.log(`  合言葉:       ${cfg.password}`);
-console.log('  止めるときは、この画面で Ctrl+C を押すか、画面を閉じてください');
+console.log('');
+console.log('  ★ この黒い画面を閉じると、サーバーが止まります（遊んでいる間は開いたままにしてください）');
+console.log('     止めるときは、Ctrl+C を2回続けて押すか、画面を閉じてください');
 console.log('');
 
 let tunnel: Tunnel | null = null;
@@ -67,9 +70,12 @@ async function openTunnel(): Promise<void> {
         cfg.gistId = id;
         saveConfig(CONFIG, cfg);
       }
+      const link = `${cfg.pagesUrl}?join=${id}`;
+      const copied = await copyToClipboard(link);
       console.log('');
       console.log('  ★ 友達にはこの招待リンクを送ってください（ずっと同じです）');
-      console.log(`     ${cfg.pagesUrl}?join=${id}`);
+      console.log(`     ${link}`);
+      if (copied) console.log('     → コピーしておきました。LINE などにそのまま貼り付けられます（この画面で文字を選ぶ必要はありません）');
       console.log(`     サーバーコード: ${id}`);
       console.log('');
     } catch (e) {
@@ -99,4 +105,15 @@ async function shutdown() {
   tunnel?.proc.kill();
   process.exit(0);
 }
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const) process.on(sig, () => void shutdown());
+// Ctrl+C / Ctrl+Break は1回では止めない（コピーのつもりで押してしまうことがあるため）
+const guard = makeInterruptGuard(3000);
+for (const sig of ['SIGINT', 'SIGBREAK'] as const) {
+  process.on(sig, () => {
+    if (guard() === 'stop') return void shutdown();
+    console.log('');
+    console.log('  まだ止めていません。本当に止めるときは、3秒以内にもう一度 Ctrl+C を押してください');
+    console.log('  （招待リンクはもうコピーしてあります。コピーしたいときは、文字を選んでから右クリックでも写せます）');
+  });
+}
+// 画面を閉じた・終了を頼まれたときは、すぐ保存して止める
+for (const sig of ['SIGTERM', 'SIGHUP'] as const) process.on(sig, () => void shutdown());

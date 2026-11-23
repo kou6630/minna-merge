@@ -319,3 +319,18 @@ test('参加した人には、盤面より先に差分を送らない', async ()
   b.close();
   await room.stop();
 });
+
+test('あとから入った人も、参加中の人数に数えられる', async () => {
+  const { room, port } = await startRoom();
+  const a = new Bot(port);
+  const ja = await a.join('Aさん');
+  const b = new Bot(port);
+  const jb = await b.join('Bさん');
+  const m = await a.waitFor((x) => isBatch(x) && (x.online ?? []).length === 2);
+  assert.ok(isBatch(m) && m.online!.includes(ja.playerId) && m.online!.includes(jb.playerId));
+  const m2 = await b.waitFor((x) => isBatch(x) && (x.online ?? []).length === 2);
+  assert.ok(isBatch(m2));
+  a.close();
+  b.close();
+  await room.stop();
+});
