@@ -1,0 +1,19 @@
+{
+  "name": "minna-merge",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/client run dev",
+    "build": "npm --workspace apps/client run build",
+    "test": "node --test --test-timeout=10000 \"packages/shared/test/*.test.ts\" \"apps/server/test/*.test.ts\" \"apps/client/test/*.test.ts\"",
+    "typecheck": "tsc -p packages/shared && tsc -p apps/server && tsc -p apps/client",
+    "server": "node apps/server/src/main.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

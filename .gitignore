@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+dist/
+tools/bin/
+assets-src/check/
+config.json
+save/
+.dev-server/
+.claude/settings.local.json
+.dev-bots/
+.dev-bots.log

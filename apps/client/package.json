@@ -1,0 +1,17 @@
+{
+  "name": "@minna/client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5181 --strictPort",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@minna/shared": "*",
+    "pixi.js": "8.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}

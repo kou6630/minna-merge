@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>みんなでマージ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="title" class="title">
+      <div class="title-card">
+        <h1>みんなで<br /><span>マージ</span></h1>
+        <p class="title-sub">さびれた商店街を、みんなで立て直そう</p>
+
+        <div class="list-head">サーバー</div>
+        <div id="serverList" class="server-list"></div>
+        <form id="addServer" class="add-server">
+          <input id="addr" placeholder="招待リンク・サーバーコード・アドレス" autocomplete="off" />
+          <button class="btn btn-small" type="submit">追加</button>
+        </form>
+        <p id="titleMsg" class="title-msg" hidden></p>
+        <button id="solo" class="btn btn-sub" type="button">ひとりで練習</button>
+      </div>
+    </div>
+
+    <div id="joinDlg" class="modal" hidden>
+      <form id="joinForm" class="modal-card join-card">
+        <div class="join-title"><b id="joinServer"></b> に入る</div>
+        <label class="field">なまえ<input id="joinName" maxlength="12" autocomplete="off" /></label>
+        <label class="field">合言葉<input id="joinPass" type="password" autocomplete="off" /></label>
+        <p id="joinErr" class="join-err" hidden></p>
+        <div class="join-btns">
+          <button id="joinCancel" class="btn btn-sub" type="button">もどる</button>
+          <button class="btn" type="submit">入る</button>
+        </div>
+        <p class="join-note">2回目からは、選ぶだけで入れます</p>
+      </form>
+    </div>
+
+    <div id="hud" class="hud" hidden>
+      <div class="pill level">
+        <span class="lv">Lv<b id="lv">1</b></span>
+        <span class="xpbar"><i id="xpfill"></i></span>
+        <img src="assets/ui/xp.png" alt="" class="ic" />
+      </div>
+      <div class="pill">
+        <img src="assets/ui/energy.png" alt="" class="ic" />
+        <b id="energy">100</b><small>/100</small>
+        <small id="energyNext" class="timer"></small>
+      </div>
+      <div class="pill">
+        <img src="assets/ui/coin.png" alt="" class="ic" />
+        <b id="coins">0</b>
+      </div>
+      <div id="onlinePill" class="pill online" hidden><span class="dot"></span><b id="online">1</b><small>人</small></div>
+    </div>
+
+    <div id="netStatus" class="net-status" hidden></div>
+    <canvas id="minimap" class="minimap" width="110" height="110" hidden></canvas>
+
+    <div id="info" class="info" hidden>
+      <img id="infoImg" alt="" />
+      <div class="info-text">
+        <div id="infoName" class="info-name"></div>
+        <div id="infoSub" class="info-sub"></div>
+      </div>
+      <button id="sellBtn" class="btn btn-sell" hidden></button>
+    </div>
+
+    <div id="dock" class="dock" hidden>
+      <div id="orders" class="orders"></div>
+      <button id="storageBtn" class="storage-btn" data-drop="storage" type="button">
+        <img src="assets/ui/storage.png" alt="倉庫" />
+        <span id="storageCount">0/6</span>
+      </button>
+    </div>
+
+    <div id="storageTray" class="tray" data-drop="storage" hidden>
+      <div class="tray-head">倉庫<small>アイテムをここへドラッグすると入る</small></div>
+      <div id="slots" class="slots"></div>
+      <div id="slotActions" class="slot-actions" hidden>
+        <button id="slotOut" class="btn btn-small" type="button">盤面に出す</button>
+        <button id="slotGive" class="btn btn-small" type="button">注文に渡す</button>
+      </div>
+      <button id="expandBtn" class="btn btn-small btn-sub" type="button"></button>
+    </div>
+
+    <div id="toasts" class="toasts"></div>
+
+    <div id="levelup" class="modal" hidden>
+      <div class="modal-card">
+        <img id="luChara" class="lu-chara" alt="" />
+        <div class="lu-title">レベル <b id="luLevel"></b> になった！</div>
+        <div id="luBody" class="lu-body"></div>
+        <button id="luClose" class="btn btn-big">やった！</button>
+      </div>
+    </div>
+
+    <div id="debug" class="debug" hidden>
+      <button data-dbg="xp">経験値+50</button>
+      <button data-dbg="energy">エネルギー満タン</button>
+      <button data-dbg="reset">最初から</button>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,155 @@
+{
+ "items": {
+  "1201": "assets/items/1201.png",
+  "1202": "assets/items/1202.png",
+  "1203": "assets/items/1203.png",
+  "1204": "assets/items/1204.png",
+  "1205": "assets/items/1205.png",
+  "1101": "assets/items/1101.png",
+  "1102": "assets/items/1102.png",
+  "1103": "assets/items/1103.png",
+  "1104": "assets/items/1104.png",
+  "1105": "assets/items/1105.png",
+  "1301": "assets/items/1301.png",
+  "1302": "assets/items/1302.png",
+  "1303": "assets/items/1303.png",
+  "1304": "assets/items/1304.png",
+  "1305": "assets/items/1305.png",
+  "1001": "assets/items/1001.png",
+  "1002": "assets/items/1002.png",
+  "1003": "assets/items/1003.png",
+  "1004": "assets/items/1004.png",
+  "1005": "assets/items/1005.png",
+  "1401": "assets/items/1401.png",
+  "1402": "assets/items/1402.png",
+  "1403": "assets/items/1403.png",
+  "1404": "assets/items/1404.png",
+  "1405": "assets/items/1405.png",
+  "1501": "assets/items/1501.png",
+  "1502": "assets/items/1502.png",
+  "1503": "assets/items/1503.png",
+  "1504": "assets/items/1504.png",
+  "1505": "assets/items/1505.png",
+  "1": "assets/items/1.png",
+  "2": "assets/items/2.png",
+  "3": "assets/items/3.png",
+  "4": "assets/items/4.png",
+  "5": "assets/items/5.png",
+  "6": "assets/items/6.png",
+  "7": "assets/items/7.png",
+  "8": "assets/items/8.png",
+  "401": "assets/items/401.png",
+  "402": "assets/items/402.png",
+  "403": "assets/items/403.png",
+  "404": "assets/items/404.png",
+  "405": "assets/items/405.png",
+  "406": "assets/items/406.png",
+  "407": "assets/items/407.png",
+  "408": "assets/items/408.png",
+  "301": "assets/items/301.png",
+  "302": "assets/items/302.png",
+  "303": "assets/items/303.png",
+  "304": "assets/items/304.png",
+  "305": "assets/items/305.png",
+  "306": "assets/items/306.png",
+  "307": "assets/items/307.png",
+  "308": "assets/items/308.png",
+  "501": "assets/items/501.png",
+  "502": "assets/items/502.png",
+  "503": "assets/items/503.png",
+  "504": "assets/items/504.png",
+  "505": "assets/items/505.png",
+  "506": "assets/items/506.png",
+  "507": "assets/items/507.png",
+  "508": "assets/items/508.png",
+  "101": "assets/items/101.png",
+  "102": "assets/items/102.png",
+  "103": "assets/items/103.png",
+  "104": "assets/items/104.png",
+  "105": "assets/items/105.png",
+  "106": "assets/items/106.png",
+  "107": "assets/items/107.png",
+  "108": "assets/items/108.png",
+  "601": "assets/items/601.png",
+  "602": "assets/items/602.png",
+  "603": "assets/items/603.png",
+  "604": "assets/items/604.png",
+  "605": "assets/items/605.png",
+  "606": "assets/items/606.png",
+  "607": "assets/items/607.png",
+  "608": "assets/items/608.png",
+  "201": "assets/items/201.png",
+  "202": "assets/items/202.png",
+  "203": "assets/items/203.png",
+  "204": "assets/items/204.png",
+  "205": "assets/items/205.png",
+  "206": "assets/items/206.png",
+  "207": "assets/items/207.png",
+  "208": "assets/items/208.png"
+ },
+ "customers": [
+  {
+   "key": "boy",
+   "src": "assets/customers/boy.png"
+  },
+  {
+   "key": "student",
+   "src": "assets/customers/student.png"
+  },
+  {
+   "key": "mother",
+   "src": "assets/customers/mother.png"
+  },
+  {
+   "key": "salaryman",
+   "src": "assets/customers/salaryman.png"
+  },
+  {
+   "key": "grandma",
+   "src": "assets/customers/grandma.png"
+  },
+  {
+   "key": "grandpa",
+   "src": "assets/customers/grandpa.png"
+  }
+ ],
+ "owners": [
+  {
+   "key": "bread",
+   "src": "assets/owners/bread.png"
+  },
+  {
+   "key": "veg",
+   "src": "assets/owners/veg.png"
+  },
+  {
+   "key": "flower",
+   "src": "assets/owners/flower.png"
+  },
+  {
+   "key": "fish",
+   "src": "assets/owners/fish.png"
+  },
+  {
+   "key": "goods",
+   "src": "assets/owners/goods.png"
+  },
+  {
+   "key": "tools",
+   "src": "assets/owners/tools.png"
+  }
+ ],
+ "icons": {
+  "coin": "assets/ui/coin.png",
+  "energy": "assets/ui/energy.png",
+  "xp": "assets/ui/xp.png",
+  "storage": "assets/ui/storage.png",
+  "order": "assets/ui/order.png",
+  "sell": "assets/ui/sell.png"
+ },
+ "bg": {
+  "ground": "assets/bg/ground.jpg",
+  "shutter": "assets/bg/shutter.jpg",
+  "title": "assets/bg/title.jpg"
+ }
+}
