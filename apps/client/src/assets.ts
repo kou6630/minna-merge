@@ -1,5 +1,5 @@
 // 生成した素材（public/assets）を読み込む。無いものは仮の絵を作って埋める。
-import { Assets, Container, Graphics, Text, Texture } from 'pixi.js';
+import { Assets, Container, Graphics, Rectangle, Text, Texture } from 'pixi.js';
 import type { Application } from 'pixi.js';
 import { allKinds, chainOfKind, tierOfKind } from '@minna/shared';
 import type { TexBank } from './board.ts';
@@ -84,6 +84,13 @@ export async function loadTextures(app: Application, m: Manifest): Promise<TexBa
   );
   const ground = await load(m.bg.ground, 0xe9dcc4);
   const shutter = await load(m.bg.shutter, 0x8a8278);
+  // マスのダンボール（閉じた箱・半開きの箱）
+  const boxClosed = await load('assets/ui/box_closed.png', 0xc8954f);
+  const boxOpen = await load('assets/ui/box_open.png', 0xc8954f);
+  // 半開きの箱の手前の面（中のアイテムの前に重ねる。絵の下 48%）
+  const maxStar = await load('assets/ui/maxstar.png', 0xff5fa8);
+  const gift50 = await load('assets/ui/gift50.png', 0xe8407a);
+  const boxFront = new Texture({ source: boxOpen.source, frame: new Rectangle(boxOpen.frame.x, boxOpen.frame.y + Math.round(boxOpen.height * 0.52), boxOpen.width, boxOpen.height - Math.round(boxOpen.height * 0.52)) });
   return {
     item(kind) {
       let t = items.get(kind);
@@ -95,6 +102,11 @@ export async function loadTextures(app: Application, m: Manifest): Promise<TexBa
     },
     ground,
     shutter,
+    boxClosed,
+    boxOpen,
+    boxFront,
+    maxStar,
+    gift50,
     owner(key) {
       return owners.get(key) ?? null;
     },

@@ -20,6 +20,20 @@ export const ease = {
   inOutSine: (k: number) => -(Math.cos(Math.PI * k) - 1) / 2,
 };
 
+/** key が Pixi の物で、もう destroy されているか */
+const gone = (tw: Tw) => !!tw.key && (tw.key as { destroyed?: boolean }).destroyed === true;
+
+/** 1回だけ動かす。エラーになったら false（そのトゥイーンはやめる） */
+function safe(f: () => void): boolean {
+  try {
+    f();
+    return true;
+  } catch (e) {
+    console.warn('tween', e);
+    return false;
+  }
+}
+
 export class Tweens {
   private list: Tw[] = [];
 
@@ -38,8 +52,9 @@ export class Tweens {
     if (!hit.length) return;
     this.list = this.list.filter((tw) => tw.key !== key);
     for (const tw of hit) {
-      tw.step(1);
-      tw.done?.();
+      if (gone(tw)) continue;
+      safe(() => tw.step(1));
+      safe(() => tw.done?.());
     }
   }
 
@@ -47,14 +62,23 @@ export class Tweens {
     if (!this.list.length) return;
     const ended: Tw[] = [];
     for (const tw of this.list) {
+      // 動かしている物が消えた（destroy された）トゥイーンは、その場でやめる（毎フレームのエラーにしない）
+      if (gone(tw)) {
+        ended.push(tw);
+        continue;
+      }
       tw.t += ms;
       const k = Math.min(1, tw.t / tw.dur);
-      tw.step(tw.ease(k));
+      if (!safe(() => tw.step(tw.ease(k)))) {
+        ended.push(tw);
+        tw.done = undefined;
+        continue;
+      }
       if (k >= 1) ended.push(tw);
     }
     if (ended.length) {
       this.list = this.list.filter((tw) => !ended.includes(tw));
-      for (const tw of ended) tw.done?.();
+      for (const tw of ended) if (!gone(tw)) safe(() => tw.done?.());
     }
   }
 }

@@ -1,9 +1,9 @@
 // 指・マウスの操作: タップ / ドラッグでアイテム移動 / 何もない所をドラッグで移動 / ピンチ・ホイールで拡大縮小
-import { isOpenCell, maxTierOfKind, tierOfKind, worldOrderAtCell } from '@minna/shared';
+import { GIFTS, isGiftKind, isOpenCell, maxTierOfKind, tierOfKind } from '@minna/shared';
 import { CELL } from './board.ts';
 import type { Board } from './board.ts';
 import type { Hud } from './hud.ts';
-import type { Action } from '@minna/shared';
+import type { Action, Item } from '@minna/shared';
 import type { Conn } from './conn.ts';
 
 type Mode = 'idle' | 'pending' | 'drag' | 'pan' | 'pinch';
@@ -18,6 +18,11 @@ export class Input {
   private lastKeep = 0;
   private dropEl: HTMLElement | null = null;
   private lastCursor = 0;
+  private lastPtr = { x: 0, y: 0 };
+  /** ドキドキ中のプレゼント箱（結果が出るまで次のタップを受けない） */
+  private giftBusy = new Set<number>();
+  private cursorTimer = 0;
+  private pendingCursor: { x: number; y: number } | null = null;
 
   constructor(
     private el: HTMLElement,
@@ -37,6 +42,7 @@ export class Input {
   }
 
   private down(e: PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     this.el.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
     if (this.pointers.size === 1) {
@@ -58,7 +64,11 @@ export class Input {
 
   private move(e: PointerEvent) {
     const prev = this.pointers.get(e.pointerId);
-    if (!prev) return;
+    if (!prev) {
+      // マウスは押していなくてもカーソルをみんなに見せる（光るカーソルにぶつかれるように）
+      if (e.pointerType === 'mouse') this.cursor(e.offsetX, e.offsetY, false);
+      return;
+    }
     const cur = { x: e.offsetX, y: e.offsetY };
     this.pointers.set(e.pointerId, cur);
     this.cursor(cur.x, cur.y, false);
@@ -98,14 +108,16 @@ export class Input {
 
   private tryGrab(id: number): boolean {
     const it = this.server.world.items.get(id);
-    if (!it || it.dusty) return false;
+    if (!it || it.dusty || it.boxed) return false;
+    // ドキドキ演出中のプレゼント箱は動かせない（このあと開く）
+    if (this.giftBusy.has(id)) return false;
     if (it.owner && it.owner !== this.server.me) return false;
     if (!this.server.send({ t: 'grab', item: id })) return false;
     this.dragId = id;
-    this.board.startDrag(id);
+    document.body.classList.add('item-dragging');
+    this.board.startDrag(id, this.start.x, this.start.y);
     this.cursor(this.start.x, this.start.y, true);
-    this.board.select(-1);
-    this.hud.showInfo(null);
+    this.selectItem(undefined);
     return true;
   }
 
@@ -116,11 +128,13 @@ export class Input {
     const tid = w.cells[cell];
     const t = tid ? w.items.get(tid) : undefined;
     if (!me) return false;
-    if (!isOpenCell(w, cell)) {
-      const wo = worldOrderAtCell(w, cell);
-      return !!wo && wo.needs.some((n) => n.kind === me.kind && n.have < n.count);
-    }
-    if (!t || t.id === me.id) return false;
+    // シャッターには直接置けない（お客さんの注文に納品すると数が進む）
+    if (!isOpenCell(w, cell)) return false;
+    if (!t || t.id === me.id || t.boxed) return false;
+    const hold = w.holds.get(t.id);
+    if (hold && hold.player !== this.server.me && hold.until > this.server.now()) return false;
+    // プレゼント箱どうしは合成できない
+    if (isGiftKind(t.kind)) return false;
     return t.kind === me.kind && tierOfKind(t.kind) < maxTierOfKind(t.kind) && (!t.owner || t.owner === this.server.me);
   }
 
@@ -139,7 +153,22 @@ export class Input {
       this.mode = 'pan'; // 残った指でそのまま動かせる
       return;
     }
+    // 3本指から2本指になったとき: 残った2本で測り直す（カメラが飛ばないように）
+    if (this.mode === 'pinch' && this.pointers.size >= 2) {
+      this.pinch = this.measure();
+      return;
+    }
     if (this.pointers.size === 0) this.mode = 'idle';
+  }
+
+  /** 選んでいるアイテム（もう一度タップすると、発生器なら出す・プレゼント箱なら開ける） */
+  private selId = 0;
+
+  /** 盤面のアイテムを選ぶ（枠と、下の名前の枠） */
+  selectItem(it: Item | undefined) {
+    this.selId = it?.id ?? 0;
+    this.board.select(it ? it.cell : -1);
+    this.hud.showInfo(it ?? null);
   }
 
   private click(cell: number) {
@@ -147,24 +176,61 @@ export class Input {
     const id = cell >= 0 ? w.cells[cell] : 0;
     const it = id ? w.items.get(id) : undefined;
     if (!it) {
-      this.board.select(-1);
-      this.hud.showInfo(null);
+      this.selectItem(undefined);
+      return;
+    }
+    // 1回目のタップは選ぶだけ。選んでいる物をもう一度タップすると、発生器は出す・プレゼント箱は開ける
+    const again = this.selId === it.id;
+    this.selectItem(it);
+    if (!again) return;
+    // プレゼント箱: タップで中身が1個出る。消えるかもしれない回は、少し震わせてから結果を出す
+    if (isGiftKind(it.kind) && !it.boxed && !it.dusty) {
+      if (this.giftBusy.has(it.id)) return;
+      const risky = (it.taps ?? 0) >= GIFTS[tierOfKind(it.kind) - 1]!.safe;
+      if (risky) {
+        this.giftBusy.add(it.id);
+        this.board.suspense(it.id, 650);
+        window.setTimeout(() => {
+          this.giftBusy.delete(it.id);
+          this.server.send({ t: 'openGift', item: it.id });
+        }, 650);
+      } else if (this.server.send({ t: 'openGift', item: it.id })) {
+        this.board.bounce(it.id);
+      }
       return;
     }
     if (it.owner === this.server.me && this.server.send({ t: 'tap', gen: it.id })) {
       this.board.bounce(it.id);
+      this.hud.showInfo(w.items.get(it.id) ?? null);
     }
-    this.board.select(cell);
-    this.hud.showInfo(w.items.get(it.id) ?? null);
   }
 
   /** 自分のカーソルを送る（10回/秒まで。force なら今すぐ） */
   private cursor(sx: number, sy: number, force: boolean) {
     const now = performance.now();
-    if (!force && now - this.lastCursor < 100) return;
+    if (!force && now - this.lastCursor < 100) {
+      // 間引いた分も、止まった位置は少しあとで必ず送る
+      this.pendingCursor = { x: sx, y: sy };
+      if (!this.cursorTimer) {
+        this.cursorTimer = window.setTimeout(() => {
+          this.cursorTimer = 0;
+          const p = this.pendingCursor;
+          this.pendingCursor = null;
+          if (p) this.cursor(p.x, p.y, true);
+        }, 100 - (now - this.lastCursor));
+      }
+      return;
+    }
+    this.pendingCursor = null;
     this.lastCursor = now;
+    this.lastPtr = { x: sx, y: sy };
     const p = this.board.screenToWorld(sx, sy);
     this.server.sendCursor(p.x / CELL, p.y / CELL, this.dragId || undefined);
+  }
+
+  private clearDropHover() {
+    this.dropEl?.classList.remove('drop-hover');
+    this.dropEl = null;
   }
 
   /** 注文カードや倉庫の上か */
@@ -176,22 +242,22 @@ export class Input {
   private drop(sx: number, sy: number, target: HTMLElement | null) {
     const id = this.dragId;
     this.dragId = 0;
+    document.body.classList.remove('item-dragging');
     this.board.endDrag(id);
     this.cursor(sx, sy, true); // ドラッグ終わりを知らせる
-    const cell0 = target ? -1 : this.board.cellAtScreen(sx, sy);
     const w0 = this.server.world;
-    const wo = cell0 >= 0 && !isOpenCell(w0, cell0) ? worldOrderAtCell(w0, cell0) : undefined;
-    if (wo) {
-      // シャッターの「みんなの依頼」に納品。断られたら onReject で元に戻す
-      this.board.setHidden(id, true);
-      this.server.send({ t: 'contribute', order: wo.id, item: id });
-      return;
-    }
     if (target) {
       // 注文に納品 / 倉庫に入れる。断られたら onReject で元に戻す
       this.board.setHidden(id, true);
       if (target.dataset.drop === 'order') this.server.send({ t: 'deliver', order: Number(target.dataset.order), item: id });
       else this.server.send({ t: 'store', item: id });
+      // 返事が来ないまま（つなぎ直しなど）でアイテムが残っていたら、元のマスへ見えるように戻す
+      window.setTimeout(() => {
+        if (this.server.world.items.has(id) && this.dragId !== id) {
+          this.board.setHidden(id, false);
+          this.board.snapBack(id);
+        }
+      }, 3000);
       return;
     }
     const cell = this.board.cellAtScreen(sx, sy);
@@ -200,14 +266,21 @@ export class Input {
       this.board.snapBack(id);
       return;
     }
+    // 同じマスの中で少し動かしただけ: マスのまん中に戻す
+    const same = w0.items.get(id);
+    if (same && same.cell === cell) {
+      this.server.send({ t: 'drop', item: id, cell });
+      this.board.snapBack(id);
+      this.selectItem(same);
+      return;
+    }
     if (!this.server.send({ t: 'drop', item: id, cell })) {
       this.board.snapBack(id);
       return;
     }
     const w = this.server.world;
     const landed = w.cells[cell] ? w.items.get(w.cells[cell]!) : undefined;
-    this.board.select(landed ? cell : -1);
-    this.hud.showInfo(landed ?? null);
+    this.selectItem(landed);
   }
 
   /** サーバーにつかむのを断られたら（ほかの人が先につかんだ）、ドラッグをやめて元に戻す */
@@ -215,8 +288,11 @@ export class Input {
     if (a.t === 'grab' && a.item === this.dragId) {
       const id = this.dragId;
       this.dragId = 0;
+      document.body.classList.remove('item-dragging');
+      this.clearDropHover();
       this.board.endDrag(id);
       this.board.snapBack(id);
+      this.cursor(this.lastPtr.x, this.lastPtr.y, true);
       if (this.mode === 'drag') this.mode = 'idle';
     }
     if ((a.t === 'deliver' || a.t === 'store' || a.t === 'contribute') && a.item !== undefined) {
@@ -230,7 +306,10 @@ export class Input {
     const id = this.dragId;
     if (!id) return;
     this.dragId = 0;
+    document.body.classList.remove('item-dragging');
+    this.clearDropHover();
     this.board.endDrag(id);
+    this.cursor(this.lastPtr.x, this.lastPtr.y, true);
     this.server.send({ t: 'release', item: id });
     this.board.snapBack(id);
   }

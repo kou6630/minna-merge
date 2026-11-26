@@ -1,0 +1,103 @@
+.award-scene {
+  --night: #093d42;
+  --light: #288a7d;
+  --foil-0: #ffd06b;
+  --foil-1: #7df2d1;
+  --foil-2: #fff1ad;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 44%, #835f384a, #111d26be 70%);
+}
+.award-scene[data-award="orders"] {
+  --night: #592432; --light: #b54a48;
+  --foil-1: #ff828a; --foil-2: #ffeac7;
+}
+.award-scene[data-award="story"] {
+  --night: #4c2a57; --light: #ab6da4;
+  --foil-0: #ffcfdf; --foil-1: #ff8ebc; --foil-2: #e3b6ff;
+}
+.award-scene[data-award="half"] { --foil-1: #a9e1ff; }
+body:has(.award-scene:not([hidden])) .toasts { z-index: 14; }
+.award-scene::before {
+  content: ''; position: absolute; pointer-events: none; z-index: -1;
+  width: min(145vmax, 1480px); aspect-ratio: 1;
+  background: repeating-conic-gradient(from 4deg, transparent 0 12deg, #ffdb8812 13deg, transparent 18deg);
+  mask-image: radial-gradient(closest-side, black 28%, transparent);
+  animation: award-rays 12s ease-out both;
+}
+@keyframes award-rays { from { transform: rotate(-32deg) scale(.82); opacity: .15; } to { transform: none; opacity: 1; } }
+
+.award-card {
+  width: min(396px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+  padding: 0 14px 14px; display: flex; flex-direction: column; align-items: stretch;
+  overflow: auto; border: 2px solid #cda35e; border-radius: 24px;
+  background: linear-gradient(#fffef6, #fff5df);
+  box-shadow: 0 0 0 2px #4e331e, 0 16px 50px #0f161a80;
+}
+.award-hero {
+  position: relative; flex: none; overflow: hidden; height: clamp(122px, 27dvh, 212px); margin: 0 -14px 8px;
+  isolation: isolate; border-bottom: 2px solid #d3ac63;
+  background:
+    radial-gradient(ellipse at 50% 92%, #fff6c29c, transparent 49%),
+    radial-gradient(ellipse at 50% 62%, var(--light), var(--night) 74%);
+}
+.award-hero::before {
+  content: ''; position: absolute; inset: 7px; border: 1px solid #f6d69580;
+  border-radius: 16px 16px 4px 4px; pointer-events: none;
+  background: radial-gradient(circle at 11% 36%, #ffecc3 1px, transparent 2px),
+    radial-gradient(circle at 86% 21%, #ffecc3 1.5px, transparent 2.5px);
+  background-size: 89px 77px, 107px 93px;
+}
+.award-seal {
+  position: absolute; left: 50%; top: 53%; width: min(64%, 228px); aspect-ratio: 1;
+  translate: -50% -50%; border-radius: 50%; border: 1px solid #ffdea26b;
+  background: repeating-conic-gradient(from 1deg, #ffe39eaa 0deg .7deg, transparent .9deg 6deg);
+  mask-image: radial-gradient(closest-side, transparent 81%, black 82% 85%, transparent 86% 91%, black 92% 94%, transparent 95%, black 99%);
+  animation: award-dial 5s ease-out both;
+}
+@keyframes award-dial { from { rotate: -48deg; } to { rotate: 0deg; } }
+.award-portrait { position: absolute; top: 1%; left: 50%; translate: -50% 0; width: 48%; height: 74%; object-fit: contain; filter: drop-shadow(0 3px 5px #11242965); }
+.award-lettering { position: absolute; inset: auto 4% 2%; height: 56%; }
+.award-lettering img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 2px #19151980); }
+.award-lettering::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  mask: url('/assets/ui/reward-level.webp') center / contain no-repeat;
+  background: linear-gradient(106deg, transparent 38%, #fff9ce38 45%, #fffbe5b8 49%, transparent 55%) 120% center / 300% 100%;
+  animation: award-gleam 1.4s .28s backwards;
+}
+[data-award="orders"] .award-lettering::after { mask-image: url('/assets/ui/reward-orders.webp'); }
+@keyframes award-gleam { from { background-position-x: 118%; } to { background-position-x: -18%; } }
+.award-card .lu-title { margin: 4px 0 6px; font-size: clamp(16px, 4.2vw, 21px); }
+.award-card .lu-title b { color: #126b65; font-size: 1.45em; }
+.award-card .lu-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; margin: 0 0 10px; }
+.award-card .lu-body .row {
+  justify-content: flex-start; text-align: left; padding: 5px 9px; margin: 4px 0;
+  border: 1px solid #dec992; border-radius: 10px; background: #fffdf6;
+}
+.award-card .row img { width: 32px; height: 32px; flex: none; }
+.award-card .lu-body p { margin: 6px 0; }
+.award-card .btn { align-self: center; flex: none; min-width: 9em; font-size: 17px; }
+.award-scene .story-clear-logo { display: block; width: min(94%, 390px); height: auto; margin: 0 auto 6px; }
+.award-scene .story-reward-chara { width: 90px; height: min(90px, 12dvh); }
+.award-scene .story-reward-card { border-color: #a17745; background: linear-gradient(155deg, #fffef2, #ffe8d8); }
+[data-award="story"] .story-reward-card { background: linear-gradient(155deg, #fffaf4, #ffe9f3 63%, #f1e7ff); }
+
+.award-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; perspective: 700px; }
+.award-particles i { position: absolute; left: 50%; top: 50%; height: var(--size); width: var(--size); background: linear-gradient(120deg, #fffceb 5%, var(--tint) 36% 65%, #ad7d4a 100%); }
+.award-particles .award-glint { width: calc(var(--size) * 1.35); height: calc(var(--size) * 1.35); clip-path: polygon(50% 0, 61% 38%, 100% 50%, 60% 62%, 50% 100%, 39% 61%, 0 50%, 40% 39%); }
+.award-particles .award-crystal { clip-path: polygon(50% 0, 88% 45%, 50% 100%, 12% 46%); }
+.award-particles .award-foil { width: calc(var(--size) * .57); height: calc(var(--size) * 1.7); border-radius: 1px 3px; }
+.award-particles .award-petal { height: calc(var(--size) * 1.45); border-radius: 78% 16% 70% 20%; }
+@media (max-height: 480px) and (min-width: 460px) {
+  .award-card {
+    display: grid; grid-template-columns: 42% 1fr; grid-template-rows: auto minmax(0, 1fr) auto;
+    width: min(680px, calc(100vw - 24px)); padding: 12px; gap: 4px 14px;
+  }
+  .award-hero { grid-row: 1 / 4; margin: -12px 0 -12px -12px; height: auto; min-height: 180px; border: 0; }
+  .award-lettering { height: 45%; inset: auto 1% 8%; }
+  .award-card .btn { justify-self: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .award-scene::before, .award-seal, .award-scene .award-card { animation: none; }
+  .award-lettering::after, .award-particles { display: none; }
+}

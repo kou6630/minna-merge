@@ -16,8 +16,11 @@ export function applyOps(world: World, ops: Op[], now: number) {
       case 'spawn':
       case 'update': {
         const old = world.items.get(op.item.id);
+        // 中身が変わるだけ（update）のときは、だれかが持っていることを忘れない
+        const hold = world.holds.get(op.item.id);
         if (old) removeItem(world, old);
         putItem(world, { ...op.item });
+        if (hold && op.t === 'update') world.holds.set(op.item.id, hold);
         break;
       }
       case 'move': {
@@ -57,8 +60,8 @@ export function applyOps(world: World, ops: Op[], now: number) {
 
 function sameItem(a: Item, b: Item): boolean {
   return (
-    a.kind === b.kind && a.owner === b.owner && a.maker === b.maker && !!a.dusty === !!b.dusty &&
-    a.charges === b.charges && a.chargesAt === b.chargesAt
+    a.kind === b.kind && a.owner === b.owner && a.maker === b.maker && !!a.dusty === !!b.dusty && !!a.boxed === !!b.boxed &&
+    a.charges === b.charges && a.chargesAt === b.chargesAt && (a.taps ?? 0) === (b.taps ?? 0)
   );
 }
 

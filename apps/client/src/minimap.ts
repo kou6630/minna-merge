@@ -68,6 +68,14 @@ export class Minimap {
       c.strokeStyle = '#fff';
       c.lineWidth = 1;
       c.stroke();
+      // 光っているカーソルは、点滅する金色の輪で目立たせる
+      if (cur.glow) {
+        c.strokeStyle = `rgba(255, 200, 30, ${0.55 + 0.45 * Math.sin(performance.now() / 160)})`;
+        c.lineWidth = Math.max(2, k);
+        c.beginPath();
+        c.arc(cur.x * k, cur.y * k, Math.max(6, k * 5), 0, Math.PI * 2);
+        c.stroke();
+      }
     }
     const v = this.board.viewRect();
     c.strokeStyle = '#ffffff';

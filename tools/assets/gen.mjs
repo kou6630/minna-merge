@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, statSync, copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JOBS } from './jobs.mjs';
 
@@ -12,24 +12,27 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const RAW = join(ROOT, 'assets-src', 'raw');
 const MODEL = 'gpt-6-luna';
 const EFFORT = 'max';
-const PARALLEL = 3;
+const PARALLEL = Number(process.env.PARALLEL ?? 4);
 
 function findCodex() {
   const base = join(process.env.LOCALAPPDATA ?? '', 'OpenAI', 'Codex', 'bin');
   const found = readdirSync(base)
     .map((d) => join(base, d, 'codex.exe'))
-    .filter((p) => existsSync(p))
+    .filter((p) => existsSync(p) && existsSync(join(dirname(p), 'codex-code-mode-host.exe')))  // 部品のそろった版だけ
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   if (!found.length) throw new Error(`codex.exe が見つかりません: ${base}`);
   return found[0];
 }
 
-function runOne(codex, name, prompt) {
+function runOne(codex, name, job) {
+  const prompt = typeof job === 'string' ? job : job.prompt;
+  const images = typeof job === 'string' ? [] : (job.images ?? []);
   return new Promise((resolve) => {
     const env = { ...process.env };
     for (const k of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_API_BASE', 'CODEX_HOME']) delete env[k];
+    const imgArgs = images.flatMap((im) => ['-i', isAbsolute(im) ? im : join(ROOT, im)]);
     const args = ['-m', MODEL, '-c', `model_reasoning_effort=${EFFORT}`, '-a', 'never', 'exec',
-      '--sandbox', 'read-only', '--ignore-user-config', '--skip-git-repo-check', '--', prompt];
+      '--sandbox', 'read-only', '--ignore-user-config', '--skip-git-repo-check', ...imgArgs, '--', prompt];
     const p = spawn(codex, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => (out += d));

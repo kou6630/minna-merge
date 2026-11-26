@@ -16,14 +16,9 @@
         <h1>みんなで<br /><span>マージ</span></h1>
         <p class="title-sub">さびれた商店街を、みんなで立て直そう</p>
 
-        <div class="list-head">サーバー</div>
-        <div id="serverList" class="server-list"></div>
-        <form id="addServer" class="add-server">
-          <input id="addr" placeholder="招待リンク・サーバーコード・アドレス" autocomplete="off" />
-          <button class="btn btn-small" type="submit">追加</button>
-        </form>
+        <p id="titleStatus" class="title-status" role="status">サーバー確認中…</p>
+        <button id="startBtn" class="btn btn-start" type="button" hidden>はじめる</button>
         <p id="titleMsg" class="title-msg" hidden></p>
-        <button id="solo" class="btn btn-sub" type="button" hidden>ひとりで練習</button>
       </div>
     </div>
 
@@ -49,37 +44,81 @@
         <span class="xpbar"><i id="xpfill"></i></span>
         <img src="assets/ui/xp.png" alt="" class="ic" />
       </div>
-      <div class="pill">
+      <button id="energyBtn" class="pill pill-btn" type="button" title="ジェムでスタミナを回復">
         <img src="assets/ui/energy.png" alt="" class="ic" />
         <b id="energy">100</b><small>/100</small>
         <small id="energyNext" class="timer"></small>
-      </div>
+        <span class="pill-plus">+</span>
+      </button>
       <div class="pill">
         <img src="assets/ui/coin.png" alt="" class="ic" />
         <b id="coins">0</b>
       </div>
+      <div class="pill">
+        <img src="assets/ui/gem.png" alt="" class="ic" />
+        <b id="gems">0</b>
+      </div>
+      <button id="storyBtn" class="pill story-entry" type="button" hidden>
+        <span class="story-entry-ic">🏠</span>
+        <b>商店街</b>
+        <span id="storyBadge" class="story-badge" hidden>!</span>
+      </button>
       <div id="onlinePill" class="pill online" hidden><span class="dot"></span><b id="online">1</b><small>人</small></div>
     </div>
 
     <div id="netStatus" class="net-status" hidden></div>
     <canvas id="minimap" class="minimap" width="110" height="110" hidden></canvas>
 
+    <!-- 選んだアイテムの枠: 名前とレベル、ゴミ箱（Lv1）かコイン化（Lv2〜）、図鑑（i） -->
     <div id="info" class="info" hidden>
       <img id="infoImg" alt="" />
       <div class="info-text">
-        <div id="infoName" class="info-name"></div>
+        <div class="info-head"><span id="infoName" class="info-name"></span><b id="infoLv" class="info-lv"></b></div>
         <div id="infoSub" class="info-sub"></div>
       </div>
-      <button id="sellBtn" class="btn btn-sell" hidden></button>
+      <div class="info-btns">
+        <button id="refillBtn" class="btn btn-refill" type="button" hidden></button>
+        <button id="trashBtn" class="icon-btn btn-trash" type="button" title="ゴミ箱に入れる" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1.6v-8H10Zm3.4 0v8H15v-8h-1.6Z" /></svg>
+        </button>
+        <button id="sellBtn" class="btn btn-sell" type="button" title="コインに変える" hidden>
+          <img src="assets/ui/coin.png" alt="" /><b id="sellCoins">+1</b>
+        </button>
+        <button id="bookBtn" class="icon-btn btn-book" type="button" title="この種類のアイテムを全部見る">i</button>
+      </div>
+    </div>
+    <!-- ゴミ箱・コイン化のあと少しの間だけ: 元に戻す -->
+    <div id="undoBar" class="undo-bar" hidden>
+      <span id="undoText"></span>
+      <button id="undoBtn" class="btn btn-undo" type="button">元に戻す</button>
+      <i id="undoTime" class="undo-time"></i>
+    </div>
+    <!-- 図鑑: その種類のアイテムを Lv1 から順に。見たことのない物はシルエットと「？」 -->
+    <div id="bookModal" class="modal" hidden>
+      <div class="modal-card book-card">
+        <div class="book-head">
+          <b id="bookTitle"></b>
+          <small id="bookCount"></small>
+          <button id="bookClose" class="icon-btn book-close" type="button" title="閉じる">×</button>
+        </div>
+        <div id="bookGrid" class="book-grid"></div>
+      </div>
     </div>
 
-    <div id="dock" class="dock" hidden>
+    <aside id="dock" class="dock" hidden>
+      <div class="dock-head"><b>注文</b><small id="ordersNext"></small></div>
       <div id="orders" class="orders"></div>
+      <!-- 受け取り枠: 報酬でもらったアイテム。タップでもらった順に盤面へ -->
+      <button id="inboxBtn" class="inbox-btn is-empty" type="button" title="もらったアイテム。タップすると盤面に出る">
+        <span class="inbox-slot"><img id="inboxImg" alt="" draggable="false" /></span>
+        <b id="inboxCount" class="inbox-count" hidden>0</b>
+        <span id="inboxLabel" class="inbox-label">受け取り</span>
+      </button>
       <button id="storageBtn" class="storage-btn" data-drop="storage" type="button">
         <img src="assets/ui/storage.png" alt="倉庫" />
-        <span id="storageCount">0/6</span>
+        <span>倉庫 <b id="storageCount">0/6</b></span>
       </button>
-    </div>
+    </aside>
 
     <div id="storageTray" class="tray" data-drop="storage" hidden>
       <div class="tray-head">倉庫<small>アイテムをここへドラッグすると入る</small></div>
@@ -87,18 +126,42 @@
       <div id="slotActions" class="slot-actions" hidden>
         <button id="slotOut" class="btn btn-small" type="button">盤面に出す</button>
         <button id="slotGive" class="btn btn-small" type="button">注文に渡す</button>
+        <button id="slotTrash" class="icon-btn btn-trash" type="button" title="ゴミ箱に入れる" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1.6v-8H10Zm3.4 0v8H15v-8h-1.6Z" /></svg>
+        </button>
+        <button id="slotSell" class="btn btn-small btn-sell" type="button" title="コインに変える" hidden>
+          <img src="assets/ui/coin.png" alt="" /><b id="slotSellCoins">+1</b>
+        </button>
       </div>
       <button id="expandBtn" class="btn btn-small btn-sub" type="button"></button>
     </div>
 
     <div id="toasts" class="toasts"></div>
 
-    <div id="levelup" class="modal" hidden>
-      <div class="modal-card">
-        <img id="luChara" class="lu-chara" alt="" />
-        <div class="lu-title">レベル <b id="luLevel"></b> になった！</div>
+    <div id="levelup" class="modal award-scene" data-award="level" role="dialog" aria-modal="true" aria-labelledby="awardLogo awardTitle" hidden>
+      <div class="modal-card award-card">
+        <div class="award-hero">
+          <div class="award-seal" aria-hidden="true"></div>
+          <img id="luChara" class="award-portrait" alt="" />
+          <div class="award-lettering"><img id="awardLogo" src="assets/ui/reward-level.webp" alt="レベルアップ" /></div>
+        </div>
+        <div id="awardTitle" class="lu-title"><span id="levelTitle">レベル <b id="luLevel"></b> になった！</span><span id="ordersTitle" hidden>次のお客さんが来た！</span></div>
         <div id="luBody" class="lu-body"></div>
         <button id="luClose" class="btn btn-big">やった！</button>
+      </div>
+    </div>
+
+    <!-- ジェムでスタミナ回復 -->
+    <div id="gemShop" class="modal" hidden>
+      <div class="modal-card gem-card">
+        <div class="gem-title">スタミナを回復</div>
+        <div class="gem-have"><img src="assets/ui/gem.png" alt="" /> 持っているジェム <b id="gemHave">0</b></div>
+        <button id="gemBuyEnergy" class="btn btn-big gem-buy" type="button">
+          <img src="assets/ui/energy.png" alt="" /> スタミナ <b id="gemEnergyAmount">+100</b>
+          <span class="gem-price"><img src="assets/ui/gem.png" alt="ジェム" /><b id="gemEnergyCost">10</b></span>
+        </button>
+        <p id="gemNote" class="gem-note">ジェムはストーリーをクリアするともらえる</p>
+        <button id="gemClose" class="btn btn-sub" type="button">とじる</button>
       </div>
     </div>
 
@@ -106,6 +169,108 @@
       <button data-dbg="xp">経験値+50</button>
       <button data-dbg="energy">エネルギー満タン</button>
       <button data-dbg="reset">最初から</button>
+    </div>
+
+    <!-- 商店街復興ストーリー画面（PixiJS 2:1 アイソメトリック空間・全バラバラ素材） -->
+    <div id="storyView" class="story-view" hidden>
+      <!-- 100% フルスクリーンの PixiJS アイソメトリックキャンバス -->
+      <div id="storyIsoHost" class="story-iso-host"></div>
+
+      <!-- 上部フローティング HUD（マージ画面と同じテイスト） -->
+      <div class="story-hud-top">
+        <div class="story-hud-left">
+          <button id="storyClose" class="pill story-pill-btn" type="button">← マージ盤面</button>
+          <div class="pill story-prog-pill">
+            <b id="storyChapterTitle">ストーリー1</b>
+            <span class="story-prog-wrap">
+              <span class="story-prog-bar"><i id="storyProgressFill"></i></span>
+              <span id="storyGift50" class="story-prog-gift gift-50" title="50% プレゼント" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                  <path class="gift-bow" d="M12 7C9.8 7 8 5.8 8 4.4C8 3.2 9 2.4 10.2 2.8C11.2 3.1 11.7 4.4 12 5.6C12.3 4.4 12.8 3.1 13.8 2.8C15 2.4 16 3.2 16 4.4C16 5.8 14.2 7 12 7Z" fill="#ffd94a" stroke="#4a2b17" stroke-width="1.6" stroke-linejoin="round"/>
+                  <rect class="gift-lid" x="3" y="7" width="18" height="4.5" rx="1.4" fill="#46b8ff" stroke="#4a2b17" stroke-width="1.6"/>
+                  <rect x="4.5" y="11.5" width="15" height="9.5" rx="1.5" fill="#2b95eb" stroke="#4a2b17" stroke-width="1.6"/>
+                  <rect class="gift-band" x="10.2" y="7" width="3.6" height="14" fill="#ffd94a" stroke="#4a2b17" stroke-width="1.3"/>
+                </svg>
+              </span>
+              <span id="storyGift100" class="story-prog-gift gift-100" title="100% プレゼント" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path class="gift-bow" d="M12 7C9.6 7 7.6 5.7 7.6 4.2C7.6 2.9 8.8 2.1 10.1 2.6C11.1 3 11.7 4.3 12 5.6C12.3 4.3 12.9 3 13.9 2.6C15.2 2.1 16.4 2.9 16.4 4.2C16.4 5.7 14.4 7 12 7Z" fill="#ffe46b" stroke="#4a2b17" stroke-width="1.6" stroke-linejoin="round"/>
+                  <rect class="gift-lid" x="3" y="7" width="18" height="4.5" rx="1.4" fill="#ff5a8a" stroke="#4a2b17" stroke-width="1.6"/>
+                  <rect x="4.5" y="11.5" width="15" height="9.5" rx="1.5" fill="#e63768" stroke="#4a2b17" stroke-width="1.6"/>
+                  <rect class="gift-band" x="10.2" y="7" width="3.6" height="14" fill="#ffe46b" stroke="#4a2b17" stroke-width="1.3"/>
+                </svg>
+              </span>
+            </span>
+            <small id="storyProgressText">0%</small>
+          </div>
+        </div>
+        <div class="story-hud-right">
+          <div class="pill"><img src="assets/ui/coin.png" alt="" class="ic" /><b id="storyCoins">0</b></div>
+          <div class="pill"><img src="assets/ui/gem.png" alt="" class="ic" /><b id="storyGems">0</b></div>
+          <button id="storyResetBtn" class="pill story-pill-warn" type="button" hidden>↺ 最初</button>
+        </div>
+      </div>
+
+      <div id="storyPreviewBadge" class="story-preview-chip" hidden>コイン無限・確認モード　ドラッグ移動／ホイール拡大</div>
+
+      <!-- 左下：ストーリーを次に進めるボタン（必要なコインだけ表示） -->
+      <button id="storyMemoBtn" class="story-fab-memo" type="button" title="ストーリーをすすめる">
+        <img src="assets/ui/coin.png" alt="" />
+        <span id="storyNextCost">すすめる</span>
+        <span id="storyMemoBadge" class="story-badge" hidden>1</span>
+      </button>
+
+      <!-- 右下：現在エリア・導入再生ボタン -->
+      <div class="story-fab-right">
+        <button id="storyFitBtn" class="story-fab-mini" type="button" title="今のエリアへ戻る">🗺</button>
+        <button id="storyReplayIntro" class="story-fab-mini" type="button" title="導入ストーリーを見る">🎬</button>
+      </div>
+
+      <!-- 最下部：ゴシップハーバー／ガーデンスケープ風のコンパクト3択丸ピッカー -->
+      <div id="storyPicker" class="story-picker" hidden>
+        <div id="storyPickLabel" class="pick-float-label"></div>
+        <div class="pick-bar">
+          <button id="storyPickCancel" class="pick-act-btn cancel" type="button" title="キャンセル">✕</button>
+          <div id="storyPickChoices" class="pick-bubbles"></div>
+          <button id="storyPickConfirm" class="pick-act-btn ok" type="button" title="決定">✓</button>
+        </div>
+      </div>
+
+      <!-- 立ち絵付きビジュアルノベル会話 -->
+      <div id="storyDialog" class="story-dialog" hidden>
+        <button id="storySkip" class="story-skip" type="button">スキップ ≫</button>
+        <div class="dlg-portraits">
+          <div id="dlgLeft" class="dlg-portrait left" hidden><img id="dlgLeftImg" alt="" /></div>
+          <div id="dlgRight" class="dlg-portrait right" hidden><img id="dlgRightImg" alt="" /></div>
+        </div>
+        <div class="dlg-box">
+          <div id="dlgName" class="dlg-name"></div>
+          <div id="dlgText" class="dlg-text"></div>
+          <div class="dlg-foot">
+            <span id="dlgCount"></span>
+            <span class="dlg-next">タップ / クリックでつぎへ ▼</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- チャプタークリア報酬モーダル -->
+      <div id="storyRewardModal" class="modal award-scene" data-award="story" role="dialog" aria-modal="true" aria-labelledby="storyRewardTitle" hidden>
+        <div class="modal-card story-reward-card">
+          <img id="storyClearLogo" class="story-clear-logo" src="assets/ui/reward-story.webp" alt="ストーリークリア" width="840" height="173" hidden />
+          <img id="storyRewardLogo" class="story-reward-logo" src="assets/ui/story-half-reward.webp" alt="ストーリー中間報酬" hidden />
+          <img class="story-reward-chara" src="assets/story/reina_smile.png?v=3" alt="レイナ" />
+          <div id="storyRewardTitle" class="lu-title">第1章 クリア！</div>
+          <div id="storyRewardSub" class="story-reward-sub"></div>
+          <div class="reward-grid">
+            <div id="rwXpBox" class="reward-item"><img src="assets/ui/xp.png" alt="経験値" /><span>経験値</span><b id="rwXp">+100</b></div>
+            <div class="reward-item"><img src="assets/ui/energy.png" alt="スタミナ" /><span id="rwEnergyLabel">スタミナ</span><b id="rwEnergy">+50</b></div>
+            <div id="rwGemsBox" class="reward-item"><img src="assets/ui/gem.png" alt="ジェム" /><span>ジェム</span><b id="rwGems">+30</b></div>
+            <div id="rwPartBox" class="reward-item" hidden><img id="rwPartImg" alt="発生器の部品" /><span id="rwPartName">部品</span><b>+1</b></div>
+            <div id="rwGiftBox" class="reward-item" hidden><img id="rwGiftImg" alt="プレゼント" /><span id="rwGiftName">プレゼント</span><b>+1</b></div>
+          </div>
+          <button id="storyRewardClose" class="btn btn-big" type="button">やったー！受け取る</button>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

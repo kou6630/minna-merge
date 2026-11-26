@@ -1,4 +1,4 @@
-// タイトル画面: サーバー一覧（マイクラのマルチプレイ画面のように）・追加・参加
+// タイトル画面: サーバーが起動しているか確かめ、起動していたら「はじめる」で入る
 import type { ServerInfo } from '@minna/shared';
 import type { Conn } from './conn.ts';
 import { RemoteServer, probe } from './remote.ts';
@@ -39,41 +39,40 @@ export function savedName(): string {
   }
 }
 
-export type StartFn = (conn: Conn | 'solo') => void;
+export type StartFn = (conn: Conn | 'solo' | 'story-preview') => void;
 
 export class Title {
   private servers: Entry[] = load<Entry[]>(SERVERS_KEY, []);
   private tokens: Record<string, string> = load<Record<string, string>>(TOKENS_KEY, {});
   private busy = false;
+  /** 接続試行の世代番号（もどる・ソロ開始・削除で上げて古い接続結果を破棄する） */
+  private attempt = 0;
+  private started = false;
   private joinFor: { entry: Entry; info: ServerInfo; address: string } | null = null;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private checking = false;
+  private gistAddr = new Map<string, { address: string | null; at: number }>();
 
   constructor(private onStart: StartFn) {
     if (!this.servers.length) this.servers = [{ address: 'ws://localhost:8787', name: 'このPCのサーバー' }];
-    $('addServer').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = $<HTMLInputElement>('addr');
-      const ref = parseServerInput(input.value);
-      if (!ref) return this.msg('招待リンク・サーバーコード・アドレスのどれかを入れてください');
-      this.addEntry(ref);
-      input.value = '';
-      this.msg(null);
-      this.render();
-    });
-    $('solo').addEventListener('click', () => this.onStart('solo'));
+    $('startBtn').addEventListener('click', () => void this.enter(this.current()));
     $('joinCancel').addEventListener('click', () => this.closeJoin());
     $('joinForm').addEventListener('submit', (e) => {
       e.preventDefault();
       void this.submitJoin();
     });
-    this.render();
-
-    // 「ひとりで練習」は持ち主のブラウザだけ（開発中の localhost では常に出す）
-    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-    $('solo').hidden = !(local || isOwnerBrowser());
+    // 「ひとりで練習」（?solo）「ストーリー確認」（?story）は持ち主のブラウザだけ（開発サーバー中・localhost では常に使える）
+    const local = ['localhost', '127.0.0.1'].includes(location.hostname) || import.meta.env.DEV;
+    const canLocal = local || isOwnerBrowser();
     void this.checkOwnerLink();
 
-    // 招待リンク（?join=サーバーコード）で開かれたら、一覧に足してそのまま入る
     const params = new URLSearchParams(location.search);
+    if (canLocal && (params.has('story') || params.has('solo'))) {
+      this.launch(params.has('story') ? 'story-preview' : 'solo');
+      return;
+    }
+
+    // 招待リンク（?join=サーバーコード）で開かれたら、一覧に足してそのまま入る
     const join = params.get('join');
     if (join) {
       params.delete('join');
@@ -82,10 +81,12 @@ export class Title {
       const ref = parseServerInput(join);
       if (ref && 'gist' in ref) {
         const entry = this.addEntry(ref);
-        this.render();
+        this.markUsed(entry);
         void this.enter(entry);
       }
     }
+    void this.check();
+    this.timer = setInterval(() => void this.check(), 3000);
   }
 
   /** 自分用リンク（?owner=鍵）で開かれたら、このブラウザで「ひとりで練習」を使えるようにする */
@@ -98,14 +99,38 @@ export class Title {
     history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash);
     if (await isOwnerKey(key)) {
       markOwnerBrowser();
-      $('solo').hidden = false;
-      this.msg('このブラウザで「ひとりで練習」が使えるようになりました');
+      if (params.has('story') || params.has('solo')) {
+        this.launch(params.has('story') ? 'story-preview' : 'solo');
+        return;
+      }
+      this.msg('このブラウザで「ひとりで練習」（アドレスの最後に ?solo）と「ストーリー確認」（?story）が使えるようになりました');
     } else {
       this.msg('自分用リンクがちがいます');
     }
   }
 
-    private addEntry(ref: { gist: string } | { address: string }): Entry {
+  /** 進行中の接続試行を取り消す */
+  private cancelPending() {
+    this.attempt++;
+    this.busy = false;
+    $<HTMLButtonElement>('startBtn').disabled = false;
+  }
+
+  /** ゲーム開始（2重起動を防ぎ、裏で待っていた接続もすべて破棄する） */
+  private launch(target: Conn | 'solo' | 'story-preview') {
+    if (this.started) {
+      if (target instanceof RemoteServer) target.close();
+      return;
+    }
+    this.started = true;
+    clearInterval(this.timer);
+    this.cancelPending();
+    this.joinFor = null;
+    $('joinDlg').hidden = true;
+    this.onStart(target);
+  }
+
+  private addEntry(ref: { gist: string } | { address: string }): Entry {
     const found = this.servers.find((s) => ('gist' in ref ? s.gist === ref.gist : s.address === ref.address));
     if (found) return found;
     const entry: Entry = { ...ref };
@@ -148,75 +173,74 @@ export class Title {
     el.textContent = text ?? '';
   }
 
-  render() {
-    const list = $('serverList');
-    list.textContent = '';
-    if (!this.servers.length) {
-      const p = document.createElement('div');
-      p.className = 'server-empty';
-      p.textContent = 'サーバーがありません。アドレスを追加してください';
-      list.appendChild(p);
-    }
-    for (const entry of this.servers) {
-      const row = document.createElement('div');
-      row.className = 'server';
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      const name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = entry.name ?? entry.address ?? 'サーバー';
-      const sub = document.createElement('div');
-      sub.className = 'sub';
-      const st = document.createElement('span');
-      st.textContent = '確認中…';
-      const where = entry.gist ? `コード ${entry.gist.slice(0, 8)}…` : (entry.address ?? '').replace(/^wss?:\/\//, '');
-      sub.append(st, document.createTextNode(`　${where}`));
-      meta.append(name, sub);
-      const go = document.createElement('button');
-      go.className = 'btn btn-small';
-      go.type = 'button';
-      go.textContent = '入る';
-      go.onclick = () => void this.enter(entry);
-      const del = document.createElement('button');
-      del.className = 'del';
-      del.type = 'button';
-      del.title = '一覧から消す';
-      del.textContent = '×';
-      del.onclick = () => {
-        this.servers = this.servers.filter((s) => s !== entry);
-        this.saveServers();
-        this.render();
-      };
-      row.append(meta, go, del);
-      list.appendChild(row);
+  /** 入るサーバー（起動しているもののうち、いちばん最近入ったもの） */
+  private onlineEntry: Entry | null = null;
+  private current(): Entry {
+    return this.onlineEntry ?? this.servers[0]!;
+  }
 
-      void (async () => {
-        const where = await this.addressOf(entry);
-        const info = where.address ? await probe(where.address) : null;
-        if (where.address === null || !info) {
-          st.className = 'st-off';
-          st.textContent = where.missing ? '見つかりません' : 'オフライン';
-          return;
-        }
-        st.className = 'st-on';
-        st.textContent = `オンライン ${info.online}人`;
-        if (entry.name !== info.name || entry.id !== info.id) {
-          entry.name = info.name;
-          entry.id = info.id;
-          name.textContent = info.name;
-          this.saveServers();
-        }
-      })();
+  /** 入れたサーバーを一覧の先頭にする（次に開いたとき、まずそこを確かめる） */
+  private markUsed(entry: Entry) {
+    this.servers = [entry, ...this.servers.filter((s) => s !== entry)];
+    this.saveServers();
+  }
+
+  /** サーバーの住所。サーバーコードなら Gist を調べるのは1分に1回まで（GitHub の回数制限があるので） */
+  private async addressCached(entry: Entry): Promise<{ address: string | null; missing?: boolean }> {
+    const c = entry.gist ? this.gistAddr.get(entry.gist) : undefined;
+    if (c && Date.now() - c.at < 60_000) return { address: c.address };
+    const w = await this.addressOf(entry);
+    if (entry.gist) this.gistAddr.set(entry.gist, { address: w.address, at: Date.now() });
+    return w;
+  }
+
+  /** サーバーが起動しているか確かめ、起動していたら「はじめる」を出す（一覧の上から順に、最初に起動していたもの） */
+  private async check() {
+    if (this.started || this.checking) return;
+    this.checking = true;
+    let entry: Entry | null = null;
+    let info: ServerInfo | null = null;
+    let missing = false;
+    for (const e of [...this.servers]) {
+      const w = await this.addressCached(e);
+      if (w.missing) missing = true;
+      info = w.address ? await probe(w.address) : null;
+      if (info) {
+        entry = e;
+        break;
+      }
     }
+    this.checking = false;
+    if (this.started) return;
+    this.onlineEntry = entry;
+    const st = $('titleStatus');
+    if (!entry || !info) {
+      st.className = 'title-status';
+      st.textContent = missing ? 'サーバーが見つかりません' : 'サーバー確認中…';
+      $('startBtn').hidden = true;
+      return;
+    }
+    if (entry.name !== info.name || entry.id !== info.id) {
+      entry.name = info.name;
+      entry.id = info.id;
+      this.saveServers();
+    }
+    st.className = 'title-status is-on';
+    st.textContent = `${info.name}　${info.online}人が遊んでいます`;
+    $('startBtn').hidden = false;
   }
 
   private async enter(entry: Entry) {
-    if (this.busy) return;
+    if (this.busy || this.started) return;
+    const my = ++this.attempt;
     this.busy = true;
+    $<HTMLButtonElement>('startBtn').disabled = true;
     this.msg(null);
     const where = await this.addressOf(entry);
+    if (this.started || my !== this.attempt || !this.servers.includes(entry)) return;
     if (!where.address) {
       this.busy = false;
+      $<HTMLButtonElement>('startBtn').disabled = false;
       return this.msg(
         where.missing ? 'サーバーコードが見つかりません' : 'サーバーが起動していません。立てている人に聞いてください',
       );
@@ -230,12 +254,17 @@ export class Title {
       },
       this.resolverFor(entry),
     );
+    if (this.started || my !== this.attempt || !this.servers.includes(entry)) {
+      if (r.ok) r.conn.close();
+      return;
+    }
     this.busy = false;
+    $<HTMLButtonElement>('startBtn').disabled = false;
     if (r.ok) {
       entry.id = r.info.id;
       entry.name = r.info.name;
-      this.saveServers();
-      this.onStart(r.conn);
+      this.markUsed(entry);
+      this.launch(r.conn);
       return;
     }
     if ((r.reason === 'need-join' || r.reason === 'token') && r.info) {
@@ -248,6 +277,7 @@ export class Title {
   }
 
   private openJoin(entry: Entry, info: ServerInfo, address: string) {
+    if (this.started) return;
     this.joinFor = { entry, info, address };
     $('joinServer').textContent = info.name;
     $<HTMLInputElement>('joinName').value = savedName();
@@ -260,11 +290,12 @@ export class Title {
   private closeJoin() {
     this.joinFor = null;
     $('joinDlg').hidden = true;
+    this.cancelPending();
   }
 
   private async submitJoin() {
     const j = this.joinFor;
-    if (!j || this.busy) return;
+    if (!j || this.busy || this.started) return;
     const name = $<HTMLInputElement>('joinName').value.trim();
     const password = $<HTMLInputElement>('joinPass').value;
     const err = $('joinErr');
@@ -273,8 +304,13 @@ export class Title {
       err.textContent = '名前を入れてください';
       return;
     }
+    const my = ++this.attempt;
     this.busy = true;
     const r = await RemoteServer.connect(j.address, () => ({ name, password }), this.resolverFor(j.entry));
+    if (this.started || my !== this.attempt || this.joinFor !== j) {
+      if (r.ok) r.conn.close();
+      return;
+    }
     this.busy = false;
     if (!r.ok) {
       err.hidden = false;
@@ -286,8 +322,7 @@ export class Title {
     store(TOKENS_KEY, this.tokens);
     j.entry.id = r.info.id;
     j.entry.name = r.info.name;
-    this.saveServers();
-    this.closeJoin();
-    this.onStart(r.conn);
+    this.markUsed(j.entry);
+    this.launch(r.conn);
   }
 }

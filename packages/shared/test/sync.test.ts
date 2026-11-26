@@ -41,8 +41,8 @@ test('2つの盤面の差を ops にして当てると、同じ盤面になる',
   const gen = [...b.items.values()].find((i) => i.owner === 'p')!;
   apply(b, 'p', { t: 'tap', gen: gen.id }, T0, rng);
   apply(b, 'p', { t: 'grab', item: gen.id }, T0, rng);
-  apply(b, 'p', { t: 'drop', item: gen.id, cell: cellAt(47, 47) }, T0, rng);
-  const some = [...b.items.values()].find((i) => i.dusty)!;
+  apply(b, 'p', { t: 'drop', item: gen.id, cell: cellAt(4, 99) }, T0, rng);
+  const some = [...b.items.values()].find((i) => i.owner !== 'p')!;
   b.items.delete(some.id);
   b.cells[some.cell] = 0;
   const ops = diffWorlds(a, b);
