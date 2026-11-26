@@ -29,11 +29,12 @@ export type Tunnel = { url: string; proc: ChildProcess };
 /** 一時トンネルを開く。URL が出るまで待つ */
 export function startTunnel(bin: string, port: number, onExit: (code: number | null) => void): Promise<Tunnel> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(bin, ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate'], {
+    const proc = spawn(bin, ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate', '--protocol', 'http2'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
     let done = false;
+    let opened = false;
     let buf = '';
     const timer = setTimeout(() => {
       if (done) return;
@@ -47,6 +48,7 @@ export function startTunnel(bin: string, port: number, onExit: (code: number | n
       const url = findTunnelUrl(buf);
       if (url) {
         done = true;
+        opened = true;
         clearTimeout(timer);
         resolve({ url, proc });
       }
@@ -67,6 +69,8 @@ export function startTunnel(bin: string, port: number, onExit: (code: number | n
         reject(new Error(`cloudflared が止まりました（${code}）`));
         return;
       }
+      // URL が出ずに自分で止めたとき（reject 済み）は、つなぎ直しを2重に始めない
+      if (!opened) return;
       onExit(code);
     });
   });

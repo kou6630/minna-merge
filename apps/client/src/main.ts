@@ -33,6 +33,11 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
   const manifest = await loadManifest();
   const tex = await loadTextures(app, manifest);
   const board = new Board(app, tex, conn, conn.me);
+  // ストーリー画面を開いている間は、後ろの盤面を描かない（重くなるので）
+  new MutationObserver(() => {
+    if (document.getElementById('storyView')?.hidden === false) app.ticker.stop();
+    else app.ticker.start();
+  }).observe(document.getElementById('storyView')!, { attributes: true, attributeFilter: ['hidden'] });
   const hud = new Hud(manifest, conn.me, () => conn.now());
   const input = new Input(app.canvas, board, conn, hud);
   const solo = conn instanceof LocalServer;

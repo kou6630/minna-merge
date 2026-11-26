@@ -49,11 +49,15 @@ const gistContent = (url: string, online: boolean): GistContent => ({
   updated: new Date().toISOString(),
 });
 
+let opening = false;
 async function openTunnel(): Promise<void> {
+  // 同時に2つ開かない（2つ動くと、古いほうが残ったままになる）
+  if (opening || tunnel || stopping) return;
   if (!existsSync(CLOUDFLARED)) {
     console.log(`  外から入れるようにするには ${CLOUDFLARED} が必要です（README を見てください）`);
     return;
   }
+  opening = true;
   try {
     tunnel = await startTunnel(CLOUDFLARED, port, (code) => {
       if (stopping) return;
@@ -62,10 +66,12 @@ async function openTunnel(): Promise<void> {
       setTimeout(() => void openTunnel(), 5000);
     });
   } catch (e) {
+    opening = false;
     log(`トンネルを開けませんでした: ${(e as Error).message}。10秒後にもう一度試します`);
     setTimeout(() => void openTunnel(), 10_000);
     return;
   }
+  opening = false;
   const ws = toWs(tunnel.url);
   console.log(`  外からの直接アドレス: ${ws}`);
   if (gistOk) {

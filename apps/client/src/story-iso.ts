@@ -20,8 +20,15 @@ const depthOf = (gx: number, gy: number, bias = 0) => (gy - gx) * 100 + bias;
 type BoxMeta = { ax: number; ay: number; s: number; W: number; D: number };
 type AnimType = 'remove' | 'pop' | 'drop';
 type Anim = { type: AnimType; t: number; dur: number; onMid?: () => void; mid?: boolean };
+/** 選んだあとの絵（家具や飾りの3択 _0〜_2）は、使うときに読み込む（全部だと 400MB をこえる） */
+function isLazyKey(path: string): boolean {
+  return /_[012]\.png$/.test(path) && !/^iso\/(walk_|sw_|town_|gate_)/.test(path);
+}
+
 type Prop = {
   id: string; gx: number; gy: number; c: Container; sp: Sprite;
+  /** 今出したい絵（あとから読み込む絵のとき、読み終わったら貼る） / 幅指定で置いた物の幅 */
+  want?: string; tw?: number;
   /** 人が通れない物（花壇・ベンチ・家具など）。fw×fh は床の大きさ（マス） */
   block?: boolean; fw?: number; fh?: number;
   sx: number; sy: number;
@@ -299,14 +306,14 @@ export class StoryIsoMap {
     const app = new Application();
     await app.init({
       resizeTo: host, background: '#8d8a84', antialias: true,
-      resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true,
+      resolution: Math.min(1.5, window.devicePixelRatio || 1), autoDensity: true,
     });
     this.app = app;
     host.appendChild(app.canvas);
     try {
       this.meta = await (await fetch(`assets/story/iso/box-meta.json?v=${STORY_ASSET_V}`)).json();
     } catch { this.meta = {}; }
-    await Promise.all(this.assetKeys().map(async (k) => {
+    await Promise.all(this.assetKeys().filter((k) => !isLazyKey(k)).map(async (k) => {
       try { this.tex.set(k, await Assets.load<Texture>(`assets/story/${k}?v=${STORY_ASSET_V}`)); } catch { /* 無い素材は白 */ }
     }));
     this.worldLayer.sortableChildren = true;
@@ -388,8 +395,25 @@ export class StoryIsoMap {
     return [...k];
   }
 
+  private texPath(name: string): string {
+    return name.includes('/') || name.startsWith('cloud_') ? name : `iso/${name}.png`;
+  }
+
   private getTex(name: string): Texture {
-    return this.tex.get(name.includes('/') || name.startsWith('cloud_') ? name : `iso/${name}.png`) ?? Texture.WHITE;
+    return this.tex.get(this.texPath(name)) ?? Texture.WHITE;
+  }
+
+  /** あとから読み込む絵を読む（同じ絵は1回だけ） */
+  private lazyLoads = new Map<string, Promise<void>>();
+  private loadLazy(path: string): Promise<void> {
+    let p = this.lazyLoads.get(path);
+    if (!p) {
+      p = Assets.load<Texture>(`assets/story/${path}?v=${STORY_ASSET_V}`)
+        .then((t) => { this.tex.set(path, t); })
+        .catch(() => { this.tex.set(path, Texture.WHITE); });
+      this.lazyLoads.set(path, p);
+    }
+    return p;
   }
 
   private group(name: string): Prop[] {
@@ -431,12 +455,26 @@ export class StoryIsoMap {
     sp.scale.set(s);
     c.addChild(sp);
     this.worldLayer.addChild(c);
-    const prop: Prop = { id, gx, gy, c, sp, sx: s, sy: s, box: null, fade: 1 };
+    const prop: Prop = { id, gx, gy, c, sp, sx: s, sy: s, box: null, fade: 1, tw: targetW };
+    if (!this.tex.has(this.texPath(key))) this.applyTex(prop, key);
     this.props.push(prop);
     return prop;
   }
 
   private applyTex(p: Prop, key: string) {
+    p.want = key;
+    const path = this.texPath(key);
+    if (!this.tex.has(path) && isLazyKey(path)) {
+      // まだ読んでいない絵: 読み終わるまで隠しておき、読めたら貼る
+      p.sp.visible = false;
+      // 置いた直後に隠される物（まだ選んでいない家具など）は読まない
+      setTimeout(() => {
+        if (p.want !== key || !p.c.visible) return;
+        void this.loadLazy(path).then(() => { if (p.want === key) this.applyTex(p, key); });
+      }, 0);
+      return;
+    }
+    p.sp.visible = true;
     const tex = this.getTex(key);
     if (p.flat) {
       // 絵の四角を、床や壁の面にぴったり合う平行四辺形に変形して貼る
@@ -476,7 +514,7 @@ export class StoryIsoMap {
       if (m && p.fw !== undefined && p.fw > 0) { p.fw = p.flip ? m.D : m.W; p.fh = p.flip ? m.W : m.D; }
       if (p === this.gate) { p.sp.scale.set(p.sx, p.sy); this.buildGateStrips(); }
     } else {
-      const w = Math.abs(p.sx) * Math.max(1, p.sp.texture.width);
+      const w = p.tw ?? Math.abs(p.sx) * Math.max(1, p.sp.texture.width);
       p.sp.texture = tex;
       const s = w / Math.max(1, tex.width);
       p.sx = s; p.sy = s;
