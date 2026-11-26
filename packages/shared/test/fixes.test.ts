@@ -91,37 +91,14 @@ test('中身の更新（update）が届いても、持っている印（hold）�
   assert.equal(w.holds.get(x.id)?.player, 'a');
 });
 
-test('発生器の部品はゴミ箱にできる（盤面が部品でいっぱいでも動けなくならない）。動く発生器は消せない', () => {
+test('発生器は部品（Lv1・Lv2）も動く発生器も消せない', () => {
   const w = setup();
-  const part = put(w, kindOf('crate', 1), 40, 40, { owner: 'a' });
-  const r = apply(w, 'a', { t: 'sell', item: part.id }, T0, rng);
-  assert.ok(r.ok && r.events.some((e) => e.t === 'sold' && e.coins === 0));
+  for (const t of [1, 2]) {
+    const part = put(w, kindOf('crate', t), 40 + t * 2, 40, { owner: 'a' });
+    assert.equal((apply(w, 'a', { t: 'sell', item: part.id }, T0, rng) as { reason: string }).reason, 'cannot-sell');
+  }
   const gen = [...w.items.values()].find((i) => i.owner === 'a' && i.kind % 100 >= GEN_WORK_TIER)!;
   assert.equal((apply(w, 'a', { t: 'sell', item: gen.id }, T0, rng) as { reason: string }).reason, 'cannot-sell');
-});
-
-test('レベルでもらった発生器は、部品を消すと動く段階まで育てられなくなるなら消せない', () => {
-  const w = setup();
-  const p = w.players.get('a')!;
-  const key = ownedGeneratorKeys(p.level)[0]!;
-  for (const it of [...w.items.values()]) {
-    if (it.owner === 'a' && isGeneratorKind(it.kind) && chainOfKind(it.kind).key === key) { w.items.delete(it.id); w.cells[it.cell] = 0; }
-  }
-  p.storage = p.storage.map((k) => (k !== null && isGeneratorKind(k) && chainOfKind(k).key === key ? null : k));
-  p.inbox = p.inbox.filter((k) => !(isGeneratorKind(k) && chainOfKind(k).key === key));
-  const reason = (id: number, t: number) => (apply(w, 'a', { t: 'sell', item: id }, t, rng) as { reason?: string }).reason;
-  // 段階2 + 段階1 + 段階1 = ちょうど動く段階になる分。どれも消せない
-  const two = put(w, kindOf(key, 2), 40, 40, { owner: 'a' });
-  const one = put(w, kindOf(key, 1), 42, 40, { owner: 'a' });
-  put(w, kindOf(key, 1), 44, 40, { owner: 'a' });
-  assert.equal(reason(one.id, T0), 'last-part');
-  assert.equal(reason(two.id, T0), 'last-part');
-  // 余分な段階1が1つあれば、1つは消せる
-  const extra = put(w, kindOf(key, 1), 46, 40, { owner: 'a' });
-  assert.equal(reason(extra.id, T0), undefined);
-  // 動く発生器があれば、部品はいくらでも消せる
-  put(w, kindOf(key, GEN_WORK_TIER), 48, 40, { owner: 'a' });
-  assert.equal(reason(one.id, T0 + 10_000), undefined);
 });
 
 test('最高段階のアイテムは半開きにならず、古いセーブの最高段階の半開きは取り出した状態で読む', () => {

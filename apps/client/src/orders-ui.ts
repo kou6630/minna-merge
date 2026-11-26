@@ -375,12 +375,9 @@ export class OrdersUi {
     sell.hidden = true;
     const kind = i >= 0 ? this.player?.storage[i] : null;
     if (kind === null || kind === undefined) return;
-    // 盤面と同じルール: プレゼント箱・動く発生器は消せない（部品とLv1はゴミ箱、Lv2〜はコイン化）
+    // 盤面と同じルール: プレゼント箱・発生器（部品も）は消せない（Lv1はゴミ箱、Lv2〜はコイン化）
     if (isGiftKind(kind)) return;
-    if (isGeneratorKind(kind)) {
-      if (tierOfKind(kind) < GEN_WORK_TIER) trash.hidden = false;
-      return;
-    }
+    if (isGeneratorKind(kind)) return; // 発生器は部品も消せない
     const coins = scrapCoins(kind);
     if (coins > 0) {
       sell.hidden = false;

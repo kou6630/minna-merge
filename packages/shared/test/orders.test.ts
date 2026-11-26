@@ -199,13 +199,12 @@ test('倉庫のアイテムも盤面と同じルールで売却・ゴミ箱化�
   assert.equal(p.coins, 0);
   assert.ok(undo.events.some((e) => e.t === 'unsold' && e.slot === s0 && e.coins === gained));
 
-  // Lv1 発生器部品はゴミ箱（0コイン）にできる
+  // 発生器の部品も倉庫から消せない
   const part = put(w, kindOf('oven', 1), 41, 40, { owner: 'a' });
   assert.ok(apply(w, 'a', { t: 'store', item: part.id }, T0, rng).ok);
   const sp = p.storage.indexOf(part.kind);
-  assert.ok(apply(w, 'a', { t: 'sell', slot: sp }, T0, rng).ok);
-  assert.equal(p.storage[sp], null);
-  assert.equal(p.coins, 0);
+  assert.equal((apply(w, 'a', { t: 'sell', slot: sp }, T0, rng) as { reason: string }).reason, 'cannot-sell');
+  p.storage[sp] = null;
 
   // 動く発生器（Lv3）とプレゼント箱は倉庫からでも売れない
   const gen = [...w.items.values()].find((i) => i.owner === 'a')!;

@@ -162,13 +162,11 @@ export class Hud {
       const g = GIFTS[tier - 1]!;
       const left = g.safe - (it.taps ?? 0);
       const what = g.from === 'child' ? `段階${g.minTier}〜${g.maxTier}の作れる子アイテム` : `段階${g.minTier}〜${g.maxTier}の持っている発生器`;
-      sub = `もう一度タップで${what}が1個出る　${left > 0 ? `あと${left}回は必ず出る` : 'ここからはタップのたびに 50% で消える'}。合成はできない`;
+      sub = `${what}が出る　${left > 0 ? `あと${left}回は必ず出る` : 'ここからは 50% で消える'}`;
     } else if (it.dusty) {
       sub = '半開きのダンボール。同じアイテムを重ねると取り出せる';
     } else if (isGeneratorKind(it.kind) && tier < GEN_WORK_TIER) {
-      sub = `部品。同じ部品を重ねて組み立てると、Lv${GEN_WORK_TIER}で動きだす`;
-      // 部品はゴミ箱にできる（盤面がいっぱいで動けなくなったとき用）
-      if (it.owner === this.me) trash.hidden = false;
+      sub = `部品。Lv${GEN_WORK_TIER}で動きだす`;
     } else if (isGeneratorKind(it.kind)) {
       if (it.owner === this.me) {
         it = { ...it };
@@ -177,7 +175,7 @@ export class Hud {
         const ch = it.charges ?? max;
         const step = (chain.gen?.chargeSec ?? 0) * 1000;
         const wait = ch < max ? `　+1まで ${fmtTime(Math.max(0, (it.chargesAt ?? 0) + step - this.now()))}` : '';
-        sub = ch > 0 ? `もう一度タップで出す　のこり ${ch}/${max}${wait}` : `使い切って休み中${wait}`;
+        sub = ch > 0 ? `のこり ${ch}/${max}${wait}` : `使い切って休み中${wait}`;
         if (ch === 0) {
           // 使い切って休んでいるときだけ、ジェムですぐ満タン
           const cost = genRefillCost(max);
@@ -195,8 +193,7 @@ export class Hud {
       }
     } else {
       // 次のアイテム（見たことがなければ名前は「？？？」）
-      if (tier < maxTierOfKind(it.kind)) sub = `重ねると Lv${tier + 1} の${this.seen.has(it.kind + 1) ? `「${itemName(it.kind + 1)}」` : '「？？？」'}`;
-      else sub = 'これ以上は合成できない';
+      if (tier >= maxTierOfKind(it.kind)) sub = '最高レベル';
       // Lv1 はゴミ箱、Lv2 からはコインに変えられる
       const coins = scrapCoins(it.kind);
       if (coins > 0) {

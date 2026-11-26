@@ -234,6 +234,22 @@ const CAM = { minX: -180, maxX: 5900, minY: -2500, maxY: 1100 };
 
 export type PreviewPick = { taskId: string; choice: number } | null;
 
+/** ストーリーの絵を、裏で少しずつ読んでおく（商店街を開いたとき、すぐ映るように）。読んだ数を返す */
+let preloaded = 0;
+let preloadTotal = 0;
+export function storyPreloadProgress(): { done: number; total: number } {
+  return { done: preloaded, total: preloadTotal };
+}
+export async function preloadStoryAssets(): Promise<void> {
+  if (preloadTotal) return;
+  const keys = (StoryIsoMap.prototype as unknown as { assetKeys(): string[] }).assetKeys().filter((k) => !isLazyKey(k));
+  preloadTotal = keys.length;
+  for (let i = 0; i < keys.length; i += 6) {
+    await Promise.all(keys.slice(i, i + 6).map((k) =>
+      Assets.load<Texture>(`assets/story/${k}?v=${STORY_ASSET_V}`).catch(() => undefined).then(() => { preloaded++; })));
+  }
+}
+
 export class StoryIsoMap {
   private app: Application | null = null;
   private host: HTMLElement | null = null;

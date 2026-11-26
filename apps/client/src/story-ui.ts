@@ -7,7 +7,7 @@ import type {
 } from '@minna/shared';
 import type { Conn } from './conn.ts';
 import { LocalServer } from './local-server.ts';
-import { StoryIsoMap } from './story-iso.ts';
+import { StoryIsoMap, preloadStoryAssets, storyPreloadProgress } from './story-iso.ts';
 import { playStoryReward } from './story-reward-fx.ts';
 import { scatterAward } from './award-fx.ts';
 
@@ -292,7 +292,23 @@ export class StoryUi {
     const seq = ++this.openSeq;
     this.render(this.conn.player);
     $('storyView').hidden = false;
-    await this.iso.mount($('storyIsoHost'));
+    // 絵を読んでいる間は「読み込み中」を出す（最初の1回だけ時間がかかる）
+    const loading = document.createElement('div');
+    loading.className = 'story-loading';
+    $('storyIsoHost').appendChild(loading);
+    const tick = () => {
+      const p = storyPreloadProgress();
+      loading.textContent = p.total ? `商店街を読み込み中… ${Math.floor((p.done / p.total) * 100)}%` : '商店街を読み込み中…';
+    };
+    tick();
+    const loadTimer = setInterval(tick, 200);
+    void preloadStoryAssets();
+    try {
+      await this.iso.mount($('storyIsoHost'));
+    } finally {
+      clearInterval(loadTimer);
+      loading.remove();
+    }
     // 読み込みの途中で閉じられた・開き直された場合はここで止める
     if (!this.openFlag || seq !== this.openSeq) {
       if (!this.openFlag) this.iso.setVisible(false);

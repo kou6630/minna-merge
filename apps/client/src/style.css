@@ -414,12 +414,16 @@ body:has(.net-status:not([hidden])) .toasts { top: 108px; }
 }
 .tray-head { font-weight: 800; margin-bottom: 6px; display: flex; align-items: baseline; gap: 6px; }
 .tray-head small { font-weight: 500; font-size: 11px; opacity: 0.7; }
-.slots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.story-loading {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5;
+  background: var(--cream); border: 3px solid var(--ink); border-radius: 14px; padding: 10px 18px; font-weight: 800;
+}
+.slots { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
 .slot {
   aspect-ratio: 1; border: 2px dashed #c9a77c; border-radius: 10px; background: #fff8ec;
-  display: grid; place-items: center; cursor: pointer; padding: 2px;
+  display: grid; place-items: center; cursor: pointer; padding: 2px; min-width: 0; overflow: hidden;
 }
-.slot img { width: 100%; height: 100%; object-fit: contain; }
+.slot img { width: 100%; height: 100%; min-width: 0; object-fit: contain; }
 .slot.filled { border-style: solid; border-color: var(--ink); }
 .slot.selected { box-shadow: 0 0 0 3px var(--accent); }
 .slot-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: center; margin-top: 8px; }

@@ -209,7 +209,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-generator': '発生器ではありません',
   parts: 'まだ部品です。同じ部品を合成して組み立てると動きだします',
   'not-gift': 'プレゼント箱ではありません',
-  'cannot-sell': '動いている発生器・プレゼント箱・ダンボールの中の物は消せません',
+  'cannot-sell': '発生器（部品も）・プレゼント箱・ダンボールの中の物は消せません',
   'last-part': 'この発生器の最後の部品なので消せません',
   'no-player': 'プレイヤーが見つかりません',
   nothing: 'まだ何も出せません',
@@ -1216,7 +1216,7 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
         if (kind === null || kind === undefined) return reject('empty-slot');
         // 盤面と同じルール: プレゼント箱・動く発生器は消せない（Lv1 や発生器の部品はゴミ箱、Lv2〜はコイン化）
         if (isGiftKind(kind)) return reject('cannot-sell');
-        if (isGeneratorKind(kind) && tierOfKind(kind) >= GEN_WORK_TIER) return reject('cannot-sell');
+        if (isGeneratorKind(kind)) return reject('cannot-sell');
         if (isLastGenPart(world, p, kind, { slot: a.slot })) return reject('last-part');
         const coins = isGeneratorKind(kind) ? 0 : scrapCoins(kind);
         p.storage[a.slot] = null;
@@ -1232,7 +1232,7 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
       // Lv1 はゴミ箱（0 コイン）、Lv2 からはコイン化。発生器・プレゼント箱は消せない
       if (it.dusty || it.boxed || isGiftKind(it.kind)) return reject('cannot-sell');
       // 発生器は、まだ部品のうちだけゴミ箱にできる（動く発生器は消せない）
-      if (isGeneratorKind(it.kind) && tierOfKind(it.kind) >= GEN_WORK_TIER) return reject('cannot-sell');
+      if (isGeneratorKind(it.kind)) return reject('cannot-sell');
       if (it.owner && it.owner !== p.id) return reject('not-yours');
       if (heldByOther(world, it.id, p.id, now)) return reject('held');
       if (isLastGenPart(world, p, it.kind, { id: it.id })) return reject('last-part');

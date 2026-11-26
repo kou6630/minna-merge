@@ -278,9 +278,8 @@ export class Input {
       this.board.snapBack(id);
       return;
     }
-    const w = this.server.world;
-    const landed = w.cells[cell] ? w.items.get(w.cells[cell]!) : undefined;
-    this.selectItem(landed);
+    // 別のマスに置いたあと（合体を含む）は、何も選ばない
+    this.selectItem(undefined);
   }
 
   /** サーバーにつかむのを断られたら（ほかの人が先につかんだ）、ドラッグをやめて元に戻す */

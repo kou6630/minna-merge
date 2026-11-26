@@ -1,9 +1,10 @@
 import './style.css';
 import './award.css';
 import { Application, CullerPlugin, extensions } from 'pixi.js';
-import { GIFTS, GLOW_ENERGY, H, OWNERS, W, isOpenCell, itemName } from '@minna/shared';
+import { GIFTS, GLOW_ENERGY, H, OWNERS, W, findEmptyNear, isOpenCell, itemName } from '@minna/shared';
 import type { GameEvent } from '@minna/shared';
 import { Board, CELL, playerColor } from './board.ts';
+import { preloadStoryAssets } from './story-iso.ts';
 import { loadManifest, loadTextures } from './assets.ts';
 import type { Conn } from './conn.ts';
 import { Hud } from './hud.ts';
@@ -33,6 +34,7 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
   const manifest = await loadManifest();
   const tex = await loadTextures(app, manifest);
   const board = new Board(app, tex, conn, conn.me);
+  setTimeout(() => void preloadStoryAssets(), 3000);
   // ストーリー画面を開いている間は、後ろの盤面を描かない（重くなるので）
   new MutationObserver(() => {
     if (document.getElementById('storyView')?.hidden === false) app.ticker.stop();
@@ -81,7 +83,8 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
         }
       }
     }
-    return best;
+    // 見えている空きマスがなければ（パネルの裏などしかない）、見えていなくても近い空きマスに出す
+    return best >= 0 ? best : findEmptyNear(w, y * W + x, 30);
   };
   // 倉庫を広げるボタンの連打（返事を待つ間に2回買ってしまう）を防ぐ
   let lastExpand = 0;
