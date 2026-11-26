@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import { isOpenCell,
   CHAPTERS, GIFTS, STORY_CLEAR_GIFTS, STORY_HALF_GIFTS, addPlayer, apply, cellAt, chainOfKind, emptyWorld, grantXp,
   isGeneratorKind, isGiftKind, kindOf, levelGiftTiers, mulberry32, ownedGeneratorKeys, tierOfKind, unlockedChains, xpToNext,
 } from '../src/index.ts';
@@ -96,7 +96,7 @@ test('まわりに空きがないとタップできない（回数も増えな�
   const rng = mulberry32(5);
   const w = setup();
   const g = put(w, gift(1), 45, 45);
-  for (let y = 42; y <= 48; y++) for (let x = 42; x <= 48; x++) if (x !== 45 || y !== 45) put(w, kindOf('bread', 1), x, y);
+  for (let c = 0; c < w.cells.length; c++) if (!w.cells[c] && isOpenCell(w, c)) put(w, kindOf('bread', 1), c % 100, Math.floor(c / 100));
   const r = apply(w, 'a', { t: 'openGift', item: g.id }, T0, rng);
   assert.equal(r.ok, false);
   if (!r.ok) assert.equal(r.reason, 'no-space');

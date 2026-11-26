@@ -22,6 +22,13 @@
       </div>
     </div>
 
+    <div id="bootLoading" class="boot-loading" role="status" hidden>
+      <div class="boot-card">
+        <div class="boot-hourglass" aria-hidden="true">⏳</div>
+        <p>ゲームを読み込み中…</p>
+      </div>
+    </div>
+
     <div id="joinDlg" class="modal" hidden>
       <form id="joinForm" class="modal-card join-card">
         <div class="join-title"><b id="joinServer"></b> に入る</div>
@@ -121,11 +128,9 @@
     </aside>
 
     <div id="storageTray" class="tray" data-drop="storage" hidden>
-      <div class="tray-head">倉庫<small>アイテムをここへドラッグすると入る</small></div>
+      <div class="tray-head">倉庫<small>ドラッグで出し入れできる</small></div>
       <div id="slots" class="slots"></div>
       <div id="slotActions" class="slot-actions" hidden>
-        <button id="slotOut" class="btn btn-small" type="button">盤面に出す</button>
-        <button id="slotGive" class="btn btn-small" type="button">注文に渡す</button>
         <button id="slotTrash" class="icon-btn btn-trash" type="button" title="ゴミ箱に入れる" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1.6v-8H10Zm3.4 0v8H15v-8h-1.6Z" /></svg>
         </button>

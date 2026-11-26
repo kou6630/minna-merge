@@ -91,9 +91,13 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
   let expandFrom = -1;
 
   const orders = new OrdersUi(manifest, {
-    unstore(slot) {
-      const cell = spawnCell();
-      if (cell < 0) return hud.toast('近くに空きマスがありません。開いた区画を映してください');
+    unstoreAt(slot, x, y) {
+      // 落とした所のマス。ふさがっていたら、そこにいちばん近い空きマス
+      const r = app.canvas.getBoundingClientRect();
+      const at = board.cellAtScreen(x - r.left, y - r.top);
+      const w = conn.world;
+      const cell = at < 0 ? -1 : isOpenCell(w, at) && !w.cells[at] ? at : findEmptyNear(w, at, 30);
+      if (cell < 0) return hud.toast('近くに空きマスがありません');
       conn.send({ t: 'unstore', slot, cell });
     },
     give(slot, order) {
@@ -349,11 +353,14 @@ new Title((c) => {
   if (started) return;
   started = true;
   $('title').hidden = true;
+  // 盤面が映るまで、砂時計の「読み込み中」を出す
+  $('bootLoading').hidden = false;
+  const done = () => { $('bootLoading').hidden = true; };
   if (c === 'story-preview') {
     const conn = new LocalServer('me', savedName() || 'レイナ', { infiniteCoins: true });
-    void boot(conn, { previewMode: true });
+    void boot(conn, { previewMode: true }).finally(done);
     return;
   }
   const conn = c === 'solo' ? new LocalServer('me', savedName() || 'ひとり') : c;
-  void boot(conn);
+  void boot(conn).finally(done);
 });

@@ -151,10 +151,8 @@ test('エネルギーがないとタップできず、時間で回復する', ()
 test('まわりが埋まっているとエネルギーを減らさずに断る', () => {
   const w = setup();
   const gen = [...w.items.values()].find((i) => i.owner === 'a')!;
-  const gx = gen.cell % 100;
-  const gy = Math.floor(gen.cell / 100);
-  for (let y = gy - 3; y <= gy + 3; y++)
-    for (let x = gx - 3; x <= gx + 3; x++) if (!w.cells[cellAt(x, y)]) put(w, bread(5), x, y);
+  // 開いている所が全部埋まっているとき（空いていれば遠くても出す）
+  for (let c = 0; c < w.cells.length; c++) if (!w.cells[c] && isOpenCell(w, c)) put(w, bread(5), c % 100, Math.floor(c / 100));
   const r = apply(w, 'a', { t: 'tap', gen: gen.id }, T0, rng);
   assert.equal(!r.ok && r.reason, 'no-space');
   assert.equal(w.players.get('a')!.energy, ENERGY_MAX);

@@ -331,6 +331,8 @@ export class Hud {
   }
 
   toast(text: string) {
+    // 同じ知らせが出ているときは、増やさずにそれを出し直す
+    for (const old of $('toasts').children) if (old.textContent === text) old.remove();
     const t = document.createElement('div');
     t.className = 'toast';
     t.textContent = text;

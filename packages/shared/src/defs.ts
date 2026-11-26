@@ -201,7 +201,8 @@ export const GLOW_ENERGY = 20;
 export const GLOW_HIT_R = 1;
 export const START_COINS = 0;
 /** 発生器から出したアイテムを置く範囲（マス） */
-export const SPAWN_RADIUS = 3;
+/** 発生器が物を出す範囲（近い順に探す。空いていれば開いている所のどこにでも出す） */
+export const SPAWN_RADIUS = 100;
 /** つかみの予約が切れるまでのミリ秒 */
 export const HOLD_MS = 15_000;
 

@@ -49,6 +49,18 @@ html, body {
 .btn-big { font-size: 22px; padding: 10px 28px; }
 
 /* タイトル */
+.boot-loading {
+  position: fixed; inset: 0; z-index: 21; display: grid; place-items: center;
+  background: url(/assets/bg/title.jpg) center / cover no-repeat, #6b4d3a;
+}
+.boot-card {
+  background: var(--cream); border: 3px solid var(--ink); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 18px 32px; text-align: center; font-weight: 800;
+}
+.boot-card p { margin: 8px 0 0; }
+.boot-hourglass { font-size: 44px; display: inline-block; animation: boot-spin 1.6s ease-in-out infinite; }
+@keyframes boot-spin { 0%, 35% { transform: rotate(0); } 50%, 85% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .boot-hourglass { animation: none; } }
 .title {
   position: fixed; inset: 0; z-index: 20;
   display: grid; place-items: center;
@@ -134,7 +146,7 @@ html, body {
 
 /* 下の情報欄 */
 .info {
-  position: fixed; left: var(--mid); bottom: calc(12px + var(--tray-h, 0px)); transform: translateX(-50%);
+  position: fixed; left: var(--mid); bottom: 12px; transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px;
   background: var(--cream);
   border: 3px solid var(--ink);
@@ -423,7 +435,10 @@ body:has(.net-status:not([hidden])) .toasts { top: 108px; }
   aspect-ratio: 1; border: 2px dashed #c9a77c; border-radius: 10px; background: #fff8ec;
   display: grid; place-items: center; cursor: pointer; padding: 2px; min-width: 0; overflow: hidden;
 }
-.slot img { width: 100%; height: 100%; min-width: 0; object-fit: contain; }
+.slot img { width: 100%; height: 100%; min-width: 0; object-fit: contain; pointer-events: none; -webkit-user-drag: none; }
+.slot.filled { touch-action: none; }
+.slot.dragging { opacity: 0.35; }
+.slot-ghost { position: fixed; z-index: 50; width: 64px; height: 64px; object-fit: contain; pointer-events: none; transform: translate(-50%, -50%) scale(1.1); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35)); }
 .slot.filled { border-style: solid; border-color: var(--ink); }
 .slot.selected { box-shadow: 0 0 0 3px var(--accent); }
 .slot-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: center; margin-top: 8px; }

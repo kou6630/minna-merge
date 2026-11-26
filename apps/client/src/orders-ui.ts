@@ -15,7 +15,8 @@ const ORDER_ART_V = '1';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export type OrdersHandlers = {
-  unstore(slot: number): void;
+  /** 倉庫から盤面に出す（x, y は画面の位置。そのマスに出す） */
+  unstoreAt(slot: number, x: number, y: number): void;
   give(slot: number, order: number): void;
   sell(slot: number): void;
   expand(): void;
@@ -49,15 +50,6 @@ export class OrdersUi {
       $('storageTray').hidden = !$('storageTray').hidden;
       this.select(-1);
       this.placeTray();
-    });
-    $('slotOut').addEventListener('click', () => {
-      if (this.selected >= 0) this.h.unstore(this.selected);
-      this.select(-1);
-    });
-    $('slotGive').addEventListener('click', () => {
-      const o = this.orderFor(this.selected);
-      if (o) this.h.give(this.selected, o.id);
-      this.select(-1);
     });
     const sellSlot = () => {
       if (this.selected >= 0) this.h.sell(this.selected);
@@ -165,7 +157,6 @@ export class OrdersUi {
       this.renderStorage(p);
     }
     // 「注文に渡す」は注文が変わったら出し直す
-    if (this.selected >= 0) $('slotGive').hidden = !this.orderFor(this.selected);
   }
 
   private renderOrders(p: Player, ready: Map<number, boolean[]>) {
@@ -344,7 +335,7 @@ export class OrdersUi {
         im.alt = itemName(kind);
         d.title = itemName(kind);
         d.appendChild(im);
-        d.onclick = () => this.select(i === this.selected ? -1 : i);
+        d.onpointerdown = (e) => this.slotDrag(e, i, d, kind);
       }
       slots.appendChild(d);
     });
@@ -360,6 +351,56 @@ export class OrdersUi {
     if (this.selected >= 0 && p.storage[this.selected] === null) this.select(-1);
     else if (this.selected >= 0) this.updateSlotSell(this.selected);
     this.placeTray();
+  }
+
+  /** 倉庫のマスをドラッグ: 盤面に落とすとそのマスに、注文カードに落とすと渡す。ほとんど動かさなければ選ぶ */
+  private slotDrag(e: PointerEvent, i: number, el: HTMLElement, kind: number) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const x0 = e.clientX; const y0 = e.clientY;
+    let ghost: HTMLImageElement | null = null;
+    let hover: HTMLElement | null = null;
+    const target = (x: number, y: number) => {
+      if (ghost) ghost.style.display = 'none';
+      const t = document.elementFromPoint(x, y);
+      if (ghost) ghost.style.display = '';
+      return t;
+    };
+    const move = (ev: PointerEvent) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+        ghost = document.createElement('img');
+        ghost.src = this.img(kind);
+        ghost.className = 'slot-ghost';
+        document.body.appendChild(ghost);
+        el.classList.add('dragging');
+      }
+      ghost.style.left = `${ev.clientX}px`;
+      ghost.style.top = `${ev.clientY}px`;
+      const o = (target(ev.clientX, ev.clientY)?.closest('[data-drop="order"]') as HTMLElement | null) ?? null;
+      if (o !== hover) { hover?.classList.remove('drop-hover'); o?.classList.add('drop-hover'); hover = o; }
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      hover?.classList.remove('drop-hover');
+      el.classList.remove('dragging');
+      if (!ghost) {
+        if (ev.type === 'pointerup') this.select(i === this.selected ? -1 : i);
+        return;
+      }
+      ghost.remove();
+      if (ev.type !== 'pointerup') return;
+      const t = target(ev.clientX, ev.clientY);
+      const order = t?.closest('[data-drop="order"]') as HTMLElement | null;
+      this.select(-1);
+      if (order) this.h.give(i, Number(order.dataset.order));
+      else if (t instanceof HTMLCanvasElement) this.h.unstoreAt(i, ev.clientX, ev.clientY);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   /** 倉庫を開いているときは、下の情報欄と「元に戻す」を倉庫の上に出す（かさなって押せなくならないように） */
@@ -389,9 +430,9 @@ export class OrdersUi {
 
   private select(i: number) {
     this.selected = i;
-    $('slotActions').hidden = i < 0;
-    $('slotGive').hidden = !this.orderFor(i);
     this.updateSlotSell(i);
+    // 消せる物のときだけ、ゴミ箱・コインのボタンを出す
+    $('slotActions').hidden = i < 0 || ($('slotTrash').hidden && $('slotSell').hidden);
     this.lastStorage = '';
     if (this.player) this.renderStorage(this.player);
   }
