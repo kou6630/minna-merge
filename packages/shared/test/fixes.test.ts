@@ -1,7 +1,7 @@
 // 見つかった不具合の再発防止
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import { makeOrder, SECOND_ITEM_TIER, producedChains, secondItemChance,
   CHAPTERS, ENERGY_MAX, GEN_WORK_TIER, LEVEL_UP_ENERGY, addPlayer, apply, applyOps, canOrder, cellAt, cloneWorld, createWorld, emptyWorld,
   chainOfKind, fromJson, halfEnergy, isGeneratorKind, kindOf, maxCharges, maxTierOfKind, mulberry32, ownedGeneratorKeys, toJson, xpToNext,
 } from '../src/index.ts';
@@ -91,14 +91,19 @@ test('中身の更新（update）が届いても、持っている印（hold）�
   assert.equal(w.holds.get(x.id)?.player, 'a');
 });
 
-test('発生器は部品（Lv1・Lv2）も動く発生器も消せない', () => {
+test('発生器の部品は、同じ種類の動く発生器があるときだけ消せる。動く発生器は消せない', () => {
   const w = setup();
-  for (const t of [1, 2]) {
-    const part = put(w, kindOf('crate', t), 40 + t * 2, 40, { owner: 'a' });
-    assert.equal((apply(w, 'a', { t: 'sell', item: part.id }, T0, rng) as { reason: string }).reason, 'cannot-sell');
-  }
-  const gen = [...w.items.values()].find((i) => i.owner === 'a' && i.kind % 100 >= GEN_WORK_TIER)!;
-  assert.equal((apply(w, 'a', { t: 'sell', item: gen.id }, T0, rng) as { reason: string }).reason, 'cannot-sell');
+  const reason = (id: number) => (apply(w, 'a', { t: 'sell', item: id }, T0, rng) as { reason?: string }).reason;
+  const one = put(w, kindOf('crate', 1), 42, 40, { owner: 'a' });
+  const two = put(w, kindOf('crate', 2), 44, 40, { owner: 'a' });
+  // 動くダンボール発生器がない: 消せない
+  assert.equal(reason(one.id), 'cannot-sell');
+  assert.equal(reason(two.id), 'cannot-sell');
+  // 動くダンボール発生器がある: 部品は消せるが、動く発生器は消せない
+  const gen = put(w, kindOf('crate', GEN_WORK_TIER), 46, 40, { owner: 'a' });
+  assert.equal(reason(one.id), undefined);
+  assert.equal(reason(two.id), undefined);
+  assert.equal(reason(gen.id), 'cannot-sell');
 });
 
 test('最高段階のアイテムは半開きにならず、古いセーブの最高段階の半開きは取り出した状態で読む', () => {
@@ -109,4 +114,33 @@ test('最高段階のアイテムは半開きにならず、古いセーブの�
   assert.equal(w2.items.get(it.id)!.dusty, undefined);
   // となりの箱も、取り出したときと同じに半開きになる（奥の箱がずっと開かない、をなくす）
   assert.equal(w2.items.get(box.id)!.dusty, true);
+});
+
+test('2種類出る発生器は、Lv5 に育てると2種類目も出て、注文にも出る', () => {
+  const w = setup();
+  const p = w.players.get('a')!;
+  for (const it of [...w.items.values()]) if (it.owner === 'a' && isGeneratorKind(it.kind)) { w.items.delete(it.id); w.cells[it.cell] = 0; }
+  const g = put(w, kindOf('oven', GEN_WORK_TIER), 40, 40, { owner: 'a' });
+  assert.deepEqual(producedChains(w, p).sort(), ['bread']);
+  w.items.delete(g.id); w.cells[g.cell] = 0;
+  put(w, kindOf('oven', SECOND_ITEM_TIER), 40, 40, { owner: 'a' });
+  assert.deepEqual(producedChains(w, p).sort(), ['bread', 'pizza']);
+});
+
+test('2種類目の出る確率は、発生器 Lv5 で 30%、最高レベルで 50%', () => {
+  assert.equal(secondItemChance(4, 9), 0);
+  assert.equal(secondItemChance(5, 9), 0.3);
+  assert.ok(Math.abs(secondItemChance(7, 9) - 0.4) < 1e-9);
+  assert.equal(secondItemChance(9, 9), 0.5);
+});
+
+test('注文は、自分の発生器から今出る物だけ（パン窯 Lv3 ならパンだけ、Lv5 ならピザも）', () => {
+  const p = { level: 30, nextOrderId: 1 } as Parameters<typeof makeOrder>[0];
+  const chainsOf = (produced: string[]) => {
+    const out = new Set<string>();
+    for (let i = 0; i < 200; i++) for (const n of makeOrder(p, mulberry32(i), [], undefined, 2, new Set(), produced).needs) out.add(chainOfKind(n.kind).key);
+    return [...out].sort();
+  };
+  assert.deepEqual(chainsOf(['bread']), ['bread']);
+  assert.deepEqual(chainsOf(['bread', 'pizza']), ['bread', 'pizza']);
 });

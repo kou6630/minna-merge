@@ -172,7 +172,7 @@ test('レベルが上がると新しい発生器がもらえ、出るものが�
   assert.equal(p.level, 5);
   const lv = r.ok ? r.events.filter((e) => e.t === 'levelup') : [];
   assert.equal(lv.length, 4);
-  assert.deepEqual(lv.flatMap((e) => (e.t === 'levelup' ? e.newChains : [])).sort(), ['drink', 'fruit', 'veg']);
+  assert.deepEqual(lv.flatMap((e) => (e.t === 'levelup' ? e.newChains : [])).sort(), ['drink', 'veg']);
   // Lv3 でウォーターサーバー、Lv5 で八百屋の木箱の部品がもらえる（2段目1個＋1段目2個＝合成すると1台）。受け取り枠に入る
   for (const key of ['waterserver', 'crate']) {
     const mine = (t: number) => p.inbox.filter((k) => k === kindOf(key, t)).length;

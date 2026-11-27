@@ -8,7 +8,7 @@ export type OrderMatch = {
   ready: Map<number, boolean[]>;
   /** 注文に出せる盤面のアイテム id（緑のチェックを付ける） */
   items: Set<number>;
-  /** 注文 id → need ごとに割り当てた盤面のアイテム id */
+  /** 注文 id → need ごとに割り当てたアイテム id（盤面の物。倉庫の物は -(枠の番号+1)） */
   assign: Map<number, (number | undefined)[]>;
 };
 
@@ -24,6 +24,13 @@ export function matchOrders(p: Player, world: World, now: number): OrderMatch {
     else avail.set(it.kind, [it.id]);
   }
   for (const list of avail.values()) list.sort((a, b) => a - b);
+  // 倉庫の物も数える（盤面の物を先に使う）。倉庫の物は -(枠の番号+1) で表す
+  p.storage.forEach((k, slot) => {
+    if (k === null || isGeneratorKind(k) || isGiftKind(k)) return;
+    const list = avail.get(k);
+    if (list) list.push(-(slot + 1));
+    else avail.set(k, [-(slot + 1)]);
+  });
   const ready = new Map<number, boolean[]>();
   const items = new Set<number>();
   const assign = new Map<number, (number | undefined)[]>();

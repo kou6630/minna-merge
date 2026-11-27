@@ -122,6 +122,8 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
     },
     complete(order, items) {
       for (const id of items) {
+        // 倉庫の物
+        if (id < 0) { conn.send({ t: 'deliver', order, slot: -id - 1 }); continue; }
         const it = conn.world.items.get(id);
         if (!it) continue;
         board.deliverFx(it.cell);
@@ -129,6 +131,24 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
       }
     },
   });
+  orders.getWorld = () => conn.world;
+  // 5秒なにもしない（アイテムを持たない・発生器を押さない）と、合体できる組を引き寄せ合わせて教える
+  let lastAct = Date.now();
+  let lastHint = 0;
+  const act = () => { lastAct = Date.now(); };
+  window.addEventListener('pointerdown', act);
+  window.addEventListener('pointermove', (e) => { if (e.buttons) act(); });
+  window.addEventListener('keydown', act);
+  setInterval(() => {
+    const idle = Date.now() - lastAct;
+    if (idle < 5000 || document.hidden || document.body.classList.contains('item-dragging')) return;
+    if (document.getElementById('storyView')?.hidden === false) return;
+    // 5秒たったら1回、そのあとは4秒ごと
+    if (Date.now() - lastHint < 4000) return;
+    lastHint = Date.now();
+    board.hintPair();
+  }, 1000);
+  hud.getWorld = () => conn.world;
 
   // 注文の列と、盤面の「注文に出せる」チェック
   const refreshOrders = () => {

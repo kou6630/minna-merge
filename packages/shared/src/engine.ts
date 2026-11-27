@@ -3,7 +3,7 @@
 import {
   CHAIN_BY_KEY, CUSTOMERS, ENERGY_MAX, LEVEL_UP_ENERGY, orderCoins, GEM_ENERGY_AMOUNT, GEM_ENERGY_COST, genRefillCost, GEN_WORK_TIER, ENERGY_REGEN_SEC, HOLD_MS, LEVEL_GRANTS, LEVEL_TIER_UP, MAX_LEVEL,
   OWNER_OF_CHAIN, orderCustomerCount, orderDoubleCount, SPAWN_RADIUS, WORLD_ORDER_BONUS, WORLD_ORDER_SLOTS, START_COINS, STORAGE_MAX, STORAGE_START, chainOfKind, isGeneratorKind, kindOf,
-  GIFTS, STORY_CLEAR_GIFTS, STORY_HALF_GIFTS, UNDO_SELL_MS, cappedClearXp, commonCount, isGiftKind, levelGiftTiers, maxTierOfKind, mergeXp, scrapCoins, sellCoins, storageCost, tierOfKind, xpToNext,
+  GIFTS, secondItemChance, STORY_CLEAR_GIFTS, STORY_HALF_GIFTS, UNDO_SELL_MS, cappedClearXp, commonCount, isGiftKind, levelGiftTiers, maxTierOfKind, mergeXp, scrapCoins, sellCoins, storageCost, tierOfKind, xpToNext,
 } from './defs.ts';
 import { copyStory, defaultStory, findStoryTask, getChapter, halfEnergy, isChapterComplete, isChapterHalf } from './story.ts';
 import type { StoryProgress } from './story.ts';
@@ -209,7 +209,7 @@ export const REJECT_TEXT: Record<RejectReason, string> = {
   'not-generator': '発生器ではありません',
   parts: 'まだ部品です。同じ部品を合成して組み立てると動きだします',
   'not-gift': 'プレゼント箱ではありません',
-  'cannot-sell': '発生器（部品も）・プレゼント箱・ダンボールの中の物は消せません',
+  'cannot-sell': '発生器・プレゼント箱・ダンボールの中の物は消せません（部品は、同じ種類の動く発生器があるときだけ消せます）',
   'last-part': 'この発生器の最後の部品なので消せません',
   'no-player': 'プレイヤーが見つかりません',
   nothing: 'まだ何も出せません',
@@ -328,10 +328,10 @@ export function blockOuterness(idx: number): number {
  */
 function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
   const lv = worldLevel(world);
-  const now = new Set(unlockedChains(lv));
+  const now = new Set(unlockedChains(lv, true));
   // 次の2つの発生器で出る物も、遠くの箱に入れる（発生器のもらえるレベルは間が空いているので、レベルではなく発生器の数で見る）
   const nextLv = Object.keys(LEVEL_GRANTS).map(Number).filter((l) => l > lv).sort((a, b) => a - b)[1] ?? MAX_LEVEL;
-  const soon = unlockedChains(nextLv).filter((c) => !now.has(c));
+  const soon = unlockedChains(nextLv, true).filter((c) => !now.has(c));
   // ねらう段階: 左下は 1、右上の角は 7（外側ほど高い）
   const target = 1 + blockOuterness(idx) * 6;
   const scored: { k: number; r: number; e: number }[] = [];
@@ -357,6 +357,22 @@ function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
 /** そのレベルまでにもらえる発生器 */
 export function ownedGeneratorKeys(level: number): string[] {
   return Object.entries(LEVEL_GRANTS).filter(([l]) => Number(l) <= level).flatMap(([, keys]) => keys);
+}
+
+/**
+ * 発生器を消してよいか。動く発生器は消せない。部品は、同じ種類の動く発生器を持っているときだけ消せる
+ * （持っていないのに消すと、うっかり発生器をなくすので。持っていれば、増えすぎた部品で盤面が埋まらないように）
+ */
+export function canTrashGenPart(world: World, playerId: string, kind: number): boolean {
+  if (!isGeneratorKind(kind)) return true;
+  if (tierOfKind(kind) >= GEN_WORK_TIER) return false;
+  const p = world.players.get(playerId);
+  if (!p) return false;
+  const key = chainOfKind(kind).key;
+  const working = (k: number | null | undefined) =>
+    k !== null && k !== undefined && isGeneratorKind(k) && chainOfKind(k).key === key && tierOfKind(k) >= GEN_WORK_TIER;
+  for (const it of world.items.values()) if (it.owner === p.id && working(it.kind)) return true;
+  return p.storage.some(working) || (p.inbox ?? []).some(working);
 }
 
 /** 発生器の部品を消すと、その発生器を動く段階まで育てられなくなるか（レベルでもらった発生器だけ。なくすと、注文の品が二度と作れなくなる）。
@@ -807,8 +823,29 @@ export function addPlayer(world: World, id: string, name: string, now: number, r
  * avoid: ほかの注文で頼んでいる物（なるべく重ねない）
  */
 /** p のレベルで注文に出してよいアイテムか（その系列の発生器があり、頼まれる段階の中） */
-export function canOrder(p: Player, kind: number): boolean {
-  const chains = unlockedChains(p.level);
+/** 自分の動く発生器から出る系統（育てたときだけ出る2種類目も、育っていれば入る） */
+export function producedChains(world: World, p: Player): string[] {
+  const out = new Set<string>();
+  const add = (k: number | null | undefined) => {
+    if (k === null || k === undefined || !isGeneratorKind(k) || tierOfKind(k) < GEN_WORK_TIER) return;
+    for (const r of chainOfKind(k).gen?.produces ?? []) if (r.minLevel <= p.level && (r.minTier ?? 1) <= tierOfKind(k)) out.add(r.chain);
+  };
+  for (const it of world.items.values()) if (it.owner === p.id) add(it.kind);
+  p.storage.forEach(add);
+  (p.inbox ?? []).forEach(add);
+  return [...out];
+}
+
+/**
+ * 注文に出してよい系統。動く発生器を持っていれば、その発生器から今出る物だけ（2種類目は発生器 Lv5 から）。
+ * 1台も動いていなければ（盤面のない計算など）、レベルで決まる系統
+ */
+function orderChains(p: Player, produced: string[]): string[] {
+  return produced.length ? produced : unlockedChains(p.level);
+}
+
+export function canOrder(p: Player, kind: number, produced: string[] = []): boolean {
+  const chains = orderChains(p, produced);
   const maxT = Math.min(7, 3 + Math.floor(p.level / 2));
   return chains.includes(chainOfKind(kind).key) && tierOfKind(kind) >= 2 && tierOfKind(kind) <= Math.min(maxT, maxTierOfKind(kind));
 }
@@ -816,8 +853,9 @@ export function canOrder(p: Player, kind: number): boolean {
 const ORDER_TOP_LEVEL = 30;
 const ORDER_TOP_CHANCE = 0.06;
 
-export function makeOrder(p: Player, rng: Rng, want: number[] = [], customer = CUSTOMERS[0]!.key, nNeeds = 1, avoid: Set<number> = new Set()): Order {
-  const chains = unlockedChains(p.level);
+export function makeOrder(p: Player, rng: Rng, want: number[] = [], customer = CUSTOMERS[0]!.key, nNeeds = 1, avoid: Set<number> = new Set(), produced: string[] = []): Order {
+  // 自分の発生器から今出る物だけを頼まれる（作れない物の注文で止まらないように）
+  const chains = orderChains(p, produced);
   const maxT = Math.min(7, 3 + Math.floor(p.level / 2));
   const minT = Math.max(2, maxT - 3);
   const needs: OrderNeed[] = [];
@@ -855,11 +893,12 @@ export function makeOrder(p: Player, rng: Rng, want: number[] = [], customer = C
  * 来るのは CUSTOMERS の先頭から orderCustomerCount 人。そのうち orderDoubleCount 人が2個注文
  */
 function topUpOrders(p: Player, rng: Rng, world?: World) {
+  const extra = world ? producedChains(world, p) : [];
   if (p.orders.length) return;
   // シャッターが待っているアイテム（まだ足りない数だけ）。1組のうち、頼むのは3人に1人くらいまで。
   // みんなのシャッターは、いちばん進んでいる人に合わせて出るので、自分で作れる物だけにする
   const want = world
-    ? world.worldOrders.flatMap((o) => o.needs.flatMap((n) => Array<number>(Math.max(0, n.count - n.have)).fill(n.kind))).filter((k) => canOrder(p, k))
+    ? world.worldOrders.flatMap((o) => o.needs.flatMap((n) => Array<number>(Math.max(0, n.count - n.have)).fill(n.kind))).filter((k) => canOrder(p, k, extra))
     : [];
   const n = orderCustomerCount(p.orderClears);
   let wantLeft = Math.max(1, Math.round(n / 3));
@@ -870,7 +909,7 @@ function topUpOrders(p: Player, rng: Rng, world?: World) {
   const avoid = new Set<number>();
   for (const c of people) {
     const before = want.length;
-    const o = makeOrder(p, rng, wantLeft > 0 ? want : [], c.key, doubles.has(c.key) ? 2 : 1, avoid);
+    const o = makeOrder(p, rng, wantLeft > 0 ? want : [], c.key, doubles.has(c.key) ? 2 : 1, avoid, extra);
     if (want.length < before) wantLeft--;
     for (const nd of o.needs) avoid.add(nd.kind);
     p.orders.push(o);
@@ -918,11 +957,12 @@ function grantItem(world: World, p: Player, kind: number, now: number, owned: bo
 }
 
 /** 今のレベルで出せる系列 */
-export function unlockedChains(level: number): string[] {
+export function unlockedChains(level: number, withGrown = false): string[] {
   const out = new Set<string>();
   for (const c of CHAIN_BY_KEY.values()) {
-    // 発生器を育てたときだけ出る物（minTier）は、ここには入れない（ダンボールや注文に出さない）
-    for (const row of c.gen?.produces ?? []) if (row.minLevel <= level && !row.minTier) out.add(row.chain);
+    // 発生器を育てたときだけ出る物（minTier）は、ふつうは入れない（注文は、育っていれば producedChains で足す）。
+    // ダンボールの中身（withGrown）には入れる
+    for (const row of c.gen?.produces ?? []) if (row.minLevel <= level && (withGrown || !row.minTier)) out.add(row.chain);
   }
   return [...out];
 }
@@ -1116,9 +1156,16 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
       const cell = findEmptyNear(world, g.cell, SPAWN_RADIUS);
       if (cell < 0) return reject('no-space');
 
-      const totalW = rows.reduce((s, r) => s + r.weight, 0);
-      let r = rng() * totalW;
-      const row = rows.find((x) => (r -= x.weight) < 0) ?? rows[0]!;
+      // 2種類目（育てたときだけ出る物）は、発生器 Lv5 で 30%、育つほど増えて最高レベルで 50%
+      const main = rows.filter((x) => !x.minTier);
+      const subs = rows.filter((x) => x.minTier);
+      const pick = (list: typeof rows) => {
+        let r = rng() * list.reduce((s, x) => s + x.weight, 0);
+        return list.find((x) => (r -= x.weight) < 0) ?? list[0]!;
+      };
+      const row = subs.length && main.length
+        ? (rng() < secondItemChance(tierOfKind(g.kind), maxTierOfKind(g.kind)) ? pick(subs) : pick(main))
+        : pick(rows);
       const upChance =
         (def.tierUp[tierOfKind(g.kind)] ?? 0) +
         LEVEL_TIER_UP.filter((l) => l.minLevel <= p.level).reduce((s, l) => s + l.add, 0);
@@ -1216,7 +1263,7 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
         if (kind === null || kind === undefined) return reject('empty-slot');
         // 盤面と同じルール: プレゼント箱・動く発生器は消せない（Lv1 や発生器の部品はゴミ箱、Lv2〜はコイン化）
         if (isGiftKind(kind)) return reject('cannot-sell');
-        if (isGeneratorKind(kind)) return reject('cannot-sell');
+        if (!canTrashGenPart(world, p.id, kind)) return reject('cannot-sell');
         if (isLastGenPart(world, p, kind, { slot: a.slot })) return reject('last-part');
         const coins = isGeneratorKind(kind) ? 0 : scrapCoins(kind);
         p.storage[a.slot] = null;
@@ -1232,7 +1279,7 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
       // Lv1 はゴミ箱（0 コイン）、Lv2 からはコイン化。発生器・プレゼント箱は消せない
       if (it.dusty || it.boxed || isGiftKind(it.kind)) return reject('cannot-sell');
       // 発生器は、まだ部品のうちだけゴミ箱にできる（動く発生器は消せない）
-      if (isGeneratorKind(it.kind)) return reject('cannot-sell');
+      if (!canTrashGenPart(world, p.id, it.kind)) return reject('cannot-sell');
       if (it.owner && it.owner !== p.id) return reject('not-yours');
       if (heldByOther(world, it.id, p.id, now)) return reject('held');
       if (isLastGenPart(world, p, it.kind, { id: it.id })) return reject('last-part');

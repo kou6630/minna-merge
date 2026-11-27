@@ -428,6 +428,51 @@ export class Board {
   }
 
   /** ジェネレーターを弾ませる（タップの手ごたえ） */
+  /** 何もしないでいるとき: 画面に映っている同じアイテムの組を、クイックイッと引き寄せ合わせる（絵だけ動かす） */
+  hintPair() {
+    const w = this.src.world;
+    const by = new Map<number, Item[]>();
+    for (const it of w.items.values()) {
+      if (it.boxed || it.dusty || isGiftKind(it.kind) || tierOfKind(it.kind) >= maxTierOfKind(it.kind)) continue;
+      if (!this.views.has(it.id)) continue;
+      const q = this.cellToClient(it.cell);
+      if (q.x < 0 || q.y < 0 || q.x > innerWidth || q.y > innerHeight) continue;
+      if (document.elementFromPoint(q.x, q.y) !== this.app.canvas) continue;
+      const list = by.get(it.kind);
+      if (list) list.push(it);
+      else by.set(it.kind, [it]);
+    }
+    let best: [Item, Item] | null = null;
+    let bd = Infinity;
+    for (const list of by.values()) {
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i]!; const b = list[j]!;
+          const d = Math.hypot(cellX(a.cell) - cellX(b.cell), cellY(a.cell) - cellY(b.cell)) + Math.random() * 0.5;
+          if (d < bd) { bd = d; best = [a, b]; }
+        }
+      }
+    }
+    if (!best) return;
+    const [a, b] = best;
+    const pa = this.cellCenter(a.cell); const pb = this.cellCenter(b.cell);
+    const len = Math.max(1, Math.hypot(pb.x - pa.x, pb.y - pa.y));
+    const dx = (pb.x - pa.x) / len; const dy = (pb.y - pa.y) / len;
+    const pull = (id: number, sx: number, sy: number) => {
+      const v = this.views.get(id);
+      if (!v) return;
+      const x0 = 0; const y0 = 0; // ふつうのアイテムの絵は、いつもマスのまん中（0, 0）
+      const amp = CELL * 0.12;
+      // 2回、相手のほうへ引っぱられて戻る
+      this.tweens.add(700, (k) => {
+        const o = Math.max(0, Math.sin(k * Math.PI * 4)) * amp;
+        v.s.position.set(x0 + sx * o, y0 + sy * o);
+      }, { key: v.s, ease: ease.linear, done: () => v.s.position.set(x0, y0) });
+    };
+    pull(a.id, dx, dy);
+    pull(b.id, -dx, -dy);
+  }
+
   bounce(id: number) {
     const v = this.views.get(id);
     if (!v) return;

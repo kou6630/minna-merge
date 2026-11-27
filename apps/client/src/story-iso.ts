@@ -22,7 +22,7 @@ type AnimType = 'remove' | 'pop' | 'drop';
 type Anim = { type: AnimType; t: number; dur: number; onMid?: () => void; mid?: boolean };
 /** 選んだあとの絵（家具や飾りの3択 _0〜_2）は、使うときに読み込む（全部だと 400MB をこえる） */
 function isLazyKey(path: string): boolean {
-  return /_[012]\.png$/.test(path) && !/^iso\/(walk_|sw_|town_|gate_)/.test(path);
+  return /^iso\//.test(path) && /_[012]\.png$/.test(path) && !/^iso\/(walk_|sw_|town_|gate_)/.test(path);
 }
 
 type Prop = {
@@ -251,6 +251,8 @@ export async function preloadStoryAssets(): Promise<void> {
 }
 
 export class StoryIsoMap {
+  /** 開いたときの読み込みの進み具合 */
+  loadProgress = { done: 0, total: 0 };
   private app: Application | null = null;
   private host: HTMLElement | null = null;
   private mountPromise: Promise<void> | null = null;
@@ -329,8 +331,11 @@ export class StoryIsoMap {
     try {
       this.meta = await (await fetch(`assets/story/iso/box-meta.json?v=${STORY_ASSET_V}`)).json();
     } catch { this.meta = {}; }
-    await Promise.all(this.assetKeys().filter((k) => !isLazyKey(k)).map(async (k) => {
+    const keys = this.assetKeys().filter((k) => !isLazyKey(k));
+    this.loadProgress = { done: 0, total: keys.length };
+    await Promise.all(keys.map(async (k) => {
       try { this.tex.set(k, await Assets.load<Texture>(`assets/story/${k}?v=${STORY_ASSET_V}`)); } catch { /* 無い素材は白 */ }
+      this.loadProgress.done++;
     }));
     this.worldLayer.sortableChildren = true;
     this.root.addChild(this.groundLayer, this.worldLayer, this.fxLayer, this.cloudLayer);
@@ -419,6 +424,18 @@ export class StoryIsoMap {
     return this.tex.get(this.texPath(name)) ?? Texture.WHITE;
   }
 
+  /** 絵を貼り終えたあとに、壁の絵の重なり順と、家具にかぶる雲を決め直す（絵の大きさで決まるので） */
+  private relayoutTimer = 0;
+  private scheduleRelayout() {
+    if (this.relayoutTimer) return;
+    this.relayoutTimer = window.setTimeout(() => {
+      this.relayoutTimer = 0;
+      if (!this.app) return;
+      this.fixArtDepths();
+      this.pruneClouds();
+    }, 30);
+  }
+
   /** あとから読み込む絵を読む（同じ絵は1回だけ） */
   private lazyLoads = new Map<string, Promise<void>>();
   private loadLazy(path: string): Promise<void> {
@@ -426,7 +443,8 @@ export class StoryIsoMap {
     if (!p) {
       p = Assets.load<Texture>(`assets/story/${path}?v=${STORY_ASSET_V}`)
         .then((t) => { this.tex.set(path, t); })
-        .catch(() => { this.tex.set(path, Texture.WHITE); });
+        .catch(() => { this.tex.set(path, Texture.WHITE); })
+        .finally(() => this.scheduleRelayout());
       this.lazyLoads.set(path, p);
     }
     return p;
@@ -1571,10 +1589,17 @@ export class StoryIsoMap {
         return;
       }
       p.c.visible = true;
-      this.applyTex(p, slot.keys[c] ?? slot.keys[0]!);
+      const key = slot.keys[c] ?? slot.keys[0]!;
+      this.applyTex(p, key);
       if (anim && p.flat) { p.anim = undefined; this.sparkleAt(p, 14); return; }
       if (anim) {
-        p.anim = { type: 'drop', t: -i * 0.18, dur: 0.55, onMid: () => this.sparkleAt(p, 14) };
+        const start = () => { p.anim = { type: 'drop', t: -i * 0.18, dur: 0.55, onMid: () => this.sparkleAt(p, 14) }; };
+        const path = this.texPath(key);
+        if (this.tex.has(path) || !isLazyKey(path)) start();
+        else {
+          p.anim = undefined;
+          void this.loadLazy(path).then(() => { if (p.want === key) { this.applyTex(p, key); start(); } });
+        }
       } else { p.anim = undefined; p.sp.position.y = 0; p.sp.scale.set(p.sx, p.sy); }
     });
   }

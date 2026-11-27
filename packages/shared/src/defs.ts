@@ -29,6 +29,14 @@ export type ChainDef = {
 
 /** 発生器は 1〜2 段目が部品（まだ動かない）。合成して 3 段目になると動きだす */
 export const GEN_WORK_TIER = 3;
+/** 2種類のアイテムを出す発生器は、このレベルまで育てると2種類目も出る */
+export const SECOND_ITEM_TIER = 5;
+/** 2種類目が出る確率: 発生器 Lv5 で 30%、レベルが上がるごとに増えて、最高レベルで 50% */
+export function secondItemChance(genTier: number, maxTier: number): number {
+  if (genTier < SECOND_ITEM_TIER) return 0;
+  const k = Math.min(1, (genTier - SECOND_ITEM_TIER) / Math.max(1, maxTier - SECOND_ITEM_TIER));
+  return 0.3 + 0.2 * k;
+}
 const GEN_CHARGES = [0, 0, 0, 12, 16, 20, 26, 32, 40, 50];
 const GEN_TIER_UP = [0, 0, 0, 0, 0.06, 0.12, 0.18, 0.25, 0.3, 0.36];
 
@@ -54,7 +62,7 @@ export const CHAINS: ChainDef[] = [
   {
     index: 10, key: 'oven', name: 'パン窯',
     tiers: ['レンガの山', '組みかけのパン窯', '小さなパン窯', 'レンガのパン窯', '大きなパン窯', '二段のパン窯', 'パン工房の窯', '石窯のパン工房', '町いちばんのベーカリー窯'],
-    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 1, chain: 'bread', weight: 10 }, { minLevel: 1, chain: 'pizza', weight: 7 }] },
+    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 1, chain: 'bread', weight: 10 }, { minLevel: 1, minTier: SECOND_ITEM_TIER, chain: 'pizza', weight: 7 }] },
   },
   {
     index: 16, key: 'waterserver', name: 'ウォーターサーバー',
@@ -64,7 +72,7 @@ export const CHAINS: ChainDef[] = [
   {
     index: 17, key: 'coffeemaker', name: '喫茶のコーヒーメーカー',
     tiers: ['金属の部品', '組みかけのコーヒーメーカー', '小さなコーヒーメーカー', 'エスプレッソマシン', '大きなエスプレッソマシン', '喫茶店のカウンター', 'レトロな喫茶店の厨房', '喫茶店の店先', '町いちばんの喫茶店'],
-    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 8, chain: 'coffee', weight: 10 }, { minLevel: 8, chain: 'tea', weight: 8 }] },
+    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 8, chain: 'coffee', weight: 10 }, { minLevel: 8, minTier: SECOND_ITEM_TIER, chain: 'tea', weight: 8 }] },
   },
   {
     index: 18, key: 'snackbasket', name: '駄菓子屋のかご',
@@ -74,7 +82,7 @@ export const CHAINS: ChainDef[] = [
   {
     index: 11, key: 'crate', name: '八百屋の木箱',
     tiers: ['木の板の束', '組みかけの木箱', '空の小さな木箱', '野菜の入った木箱', '二段の野菜棚', '屋台の木箱', '八百屋の荷車', '八百屋の店先', '大きな青果市場の台'],
-    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 5, chain: 'veg', weight: 10 }, { minLevel: 5, chain: 'fruit', weight: 8 }] },
+    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 5, chain: 'veg', weight: 10 }, { minLevel: 5, minTier: SECOND_ITEM_TIER, chain: 'fruit', weight: 8 }] },
   },
   {
     index: 19, key: 'cakeoven', name: 'ケーキ屋のオーブン',
@@ -89,12 +97,12 @@ export const CHAINS: ChainDef[] = [
   {
     index: 13, key: 'fishbox', name: '魚屋のトロ箱',
     tiers: ['発泡スチロールの板', '組みかけのトロ箱', '小さなトロ箱', '氷のトロ箱', '大きなトロ箱', '魚の屋台', '魚屋のショーケース', '魚屋の店先', '大漁の魚市場'],
-    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 20, chain: 'fish', weight: 10 }, { minLevel: 20, chain: 'shellfish', weight: 7 }] },
+    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 20, chain: 'fish', weight: 10 }, { minLevel: 20, minTier: SECOND_ITEM_TIER, chain: 'shellfish', weight: 7 }] },
   },
   {
     index: 14, key: 'shelf', name: '雑貨屋の棚',
     tiers: ['棚板の束', '組みかけの棚', '小さな棚', '木の棚', 'ガラスの棚', '大きな飾り棚', '雑貨屋の陳列台', '雑貨屋の店先', 'なんでもそろう百貨店の棚'],
-    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 24, chain: 'goods', weight: 10 }, { minLevel: 24, chain: 'cookware', weight: 8 }] },
+    gen: { energyCost: 1, charges: GEN_CHARGES, chargeSec: 20, tierUp: GEN_TIER_UP, maxOutTier: 3, produces: [{ minLevel: 24, chain: 'goods', weight: 10 }, { minLevel: 24, minTier: SECOND_ITEM_TIER, chain: 'cookware', weight: 8 }] },
   },
   {
     index: 15, key: 'toolbox', name: '工具箱',

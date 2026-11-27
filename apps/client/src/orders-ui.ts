@@ -1,9 +1,9 @@
 // 左の注文の列と倉庫の表示
-import {
+import { canTrashGenPart,
   CLEARS_PER_CUSTOMER, CUSTOMERS, GEN_WORK_TIER, STORAGE_MAX, isGeneratorKind, isGiftKind, itemName,
   orderCustomerCount, portraitSrc, scrapCoins, storageCost, tierOfKind,
 } from '@minna/shared';
-import type { Order, Player, SpeakerId } from '@minna/shared';
+import type { World, Order, Player, SpeakerId } from '@minna/shared';
 import type { Manifest } from './assets.ts';
 import type { OrderMatch } from './order-match.ts';
 export { matchOrders } from './order-match.ts';
@@ -321,6 +321,9 @@ export class OrdersUi {
     return $('inboxImg').getBoundingClientRect();
   }
 
+  /** 今の盤面（部品を消せるかを調べる） */
+  getWorld?: () => World;
+
   private renderStorage(p: Player) {
     const used = p.storage.filter((s) => s !== null).length;
     $('storageCount').textContent = `${used}/${p.storage.length}`;
@@ -374,6 +377,7 @@ export class OrdersUi {
         ghost.className = 'slot-ghost';
         document.body.appendChild(ghost);
         el.classList.add('dragging');
+        document.body.classList.add('item-dragging'); // 注文の列の端で自動スクロールさせる
       }
       ghost.style.left = `${ev.clientX}px`;
       ghost.style.top = `${ev.clientY}px`;
@@ -386,6 +390,7 @@ export class OrdersUi {
       window.removeEventListener('pointercancel', up);
       hover?.classList.remove('drop-hover');
       el.classList.remove('dragging');
+      if (ghost) document.body.classList.remove('item-dragging');
       if (!ghost) {
         if (ev.type === 'pointerup') this.select(i === this.selected ? -1 : i);
         return;
@@ -396,7 +401,7 @@ export class OrdersUi {
       const order = t?.closest('[data-drop="order"]') as HTMLElement | null;
       this.select(-1);
       if (order) this.h.give(i, Number(order.dataset.order));
-      else if (t instanceof HTMLCanvasElement) this.h.unstoreAt(i, ev.clientX, ev.clientY);
+      else if (t instanceof HTMLCanvasElement && t.id !== 'minimap') this.h.unstoreAt(i, ev.clientX, ev.clientY);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -418,7 +423,12 @@ export class OrdersUi {
     if (kind === null || kind === undefined) return;
     // 盤面と同じルール: プレゼント箱・発生器（部品も）は消せない（Lv1はゴミ箱、Lv2〜はコイン化）
     if (isGiftKind(kind)) return;
-    if (isGeneratorKind(kind)) return; // 発生器は部品も消せない
+    if (isGeneratorKind(kind)) {
+      // 部品は、同じ種類の動く発生器があるときだけゴミ箱にできる
+      const w = this.getWorld?.();
+      if (w && this.player && canTrashGenPart(w, this.player.id, kind)) trash.hidden = false;
+      return;
+    }
     const coins = scrapCoins(kind);
     if (coins > 0) {
       sell.hidden = false;

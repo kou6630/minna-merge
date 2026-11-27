@@ -295,9 +295,12 @@ export class StoryUi {
     // 絵を読んでいる間は「読み込み中」を出す（最初の1回だけ時間がかかる）
     const loading = document.createElement('div');
     loading.className = 'story-loading';
+    loading.hidden = true;
     $('storyIsoHost').appendChild(loading);
+    // すぐ読み終わるとき（2回目から）は出さない
+    const showTimer = setTimeout(() => { loading.hidden = false; }, 250);
     const tick = () => {
-      const p = storyPreloadProgress();
+      const p = this.iso.loadProgress.total ? this.iso.loadProgress : storyPreloadProgress();
       loading.textContent = p.total ? `商店街を読み込み中… ${Math.floor((p.done / p.total) * 100)}%` : '商店街を読み込み中…';
     };
     tick();
@@ -307,6 +310,7 @@ export class StoryUi {
       await this.iso.mount($('storyIsoHost'));
     } finally {
       clearInterval(loadTimer);
+      clearTimeout(showTimer);
       loading.remove();
     }
     // 読み込みの途中で閉じられた・開き直された場合はここで止める

@@ -51,6 +51,7 @@ export class Title {
   private joinFor: { entry: Entry; info: ServerInfo; address: string } | null = null;
   private timer: ReturnType<typeof setInterval> | undefined;
   private checking = false;
+  private fails = 0;
   private gistAddr = new Map<string, { address: string | null; at: number }>();
 
   constructor(private onStart: StartFn) {
@@ -64,6 +65,8 @@ export class Title {
     // 「ひとりで練習」（?solo）「ストーリー確認」（?story）は持ち主のブラウザだけ（開発サーバー中・localhost では常に使える）
     const local = ['localhost', '127.0.0.1'].includes(location.hostname) || import.meta.env.DEV;
     const canLocal = local || isOwnerBrowser();
+    // 持ち主のブラウザだけ、練習・ストーリー確認への小さなリンクを出す（タイトルへ戻ったあとも行けるように）
+    $('titleLocal').hidden = !canLocal;
     void this.checkOwnerLink();
 
     const params = new URLSearchParams(location.search);
@@ -99,6 +102,7 @@ export class Title {
     history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash);
     if (await isOwnerKey(key)) {
       markOwnerBrowser();
+      $('titleLocal').hidden = false;
       if (params.has('story') || params.has('solo')) {
         this.launch(params.has('story') ? 'story-preview' : 'solo');
         return;
@@ -216,7 +220,16 @@ export class Title {
     const st = $('titleStatus');
     if (!entry || !info) {
       st.className = 'title-status';
-      st.textContent = missing ? 'サーバーが見つかりません' : 'サーバー確認中…';
+      this.fails++;
+      // 公開ページで、このPCのサーバーしか知らない（招待リンクから開いていない）
+      const noInvite = !this.servers.some((s) => s.gist) && !['localhost', '127.0.0.1'].includes(location.hostname);
+      st.textContent = missing
+        ? 'サーバーが見つかりません'
+        : noInvite
+          ? '招待リンクから開いてください'
+          : this.fails > 1
+            ? 'サーバーが起動していません（起動を待っています…）'
+            : 'サーバー確認中…';
       $('startBtn').hidden = true;
       return;
     }

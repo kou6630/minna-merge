@@ -1,5 +1,5 @@
 // 画面の上に重ねる DOM の表示（レベル・エネルギー・コイン・情報欄・お知らせ・レベルアップ）
-import {
+import { canTrashGenPart,
   CHAIN_BY_KEY, ENERGY_MAX, GEM_ENERGY_AMOUNT, GEM_ENERGY_COST, GEN_WORK_TIER, GIFTS, genRefillCost, OWNER_OF_CHAIN, chainOfKind, itemName, isGeneratorKind, isGiftKind, kindOf, maxCharges, maxTierOfKind,
   nextEnergyMs, scrapCoins, syncCharges, syncEnergy, tierOfKind, UNDO_SELL_MS, xpToNext,
 } from '@minna/shared';
@@ -122,6 +122,9 @@ export class Hud {
   }
 
   /** 選んでいるアイテムの表示を、今の盤面に合わせ直す */
+  /** 今の盤面（部品を消せるかを調べる） */
+  getWorld?: () => World;
+
   refresh(world: World) {
     if (this.info) this.showInfo(world.items.get(this.info.id) ?? null);
   }
@@ -167,6 +170,9 @@ export class Hud {
       sub = '半開きのダンボール。同じアイテムを重ねると取り出せる';
     } else if (isGeneratorKind(it.kind) && tier < GEN_WORK_TIER) {
       sub = `部品。Lv${GEN_WORK_TIER}で動きだす`;
+      // 同じ種類の動く発生器があれば、部品はゴミ箱にできる
+      const w = this.getWorld?.();
+      if (it.owner === this.me && w && canTrashGenPart(w, this.me, it.kind)) trash.hidden = false;
     } else if (isGeneratorKind(it.kind)) {
       if (it.owner === this.me) {
         it = { ...it };
