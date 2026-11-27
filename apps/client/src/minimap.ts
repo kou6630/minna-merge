@@ -1,5 +1,5 @@
 // 右上のミニマップ: 開いた区画・みんなの依頼・ほかの人の居場所・今映している範囲。押すとそこへ移動
-import { BLOCK, BLOCKS_X, BLOCKS_Y, H, W, cellAt } from '@minna/shared';
+import { BLOCK, BLOCKS_X, BLOCKS_Y, H, PLAY_CELLS, PLAY_Y0, W, blockInPlay, cellAt } from '@minna/shared';
 import type { Board } from './board.ts';
 import { playerColor } from './board.ts';
 import type { Conn } from './conn.ts';
@@ -22,8 +22,9 @@ export class Minimap {
     canvas.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const r = canvas.getBoundingClientRect();
-      const x = Math.floor(((e.clientX - r.left) / r.width) * W);
-      const y = Math.floor(((e.clientY - r.top) / r.height) * H);
+      // 地図に出すのは遊べる範囲（左下の 50×50マス）だけ
+      const x = Math.floor(((e.clientX - r.left) / r.width) * PLAY_CELLS);
+      const y = PLAY_Y0 + Math.floor(((e.clientY - r.top) / r.height) * PLAY_CELLS);
       this.board.centerOn(cellAt(Math.min(W - 1, Math.max(0, x)), Math.min(H - 1, Math.max(0, y))));
       this.draw();
     });
@@ -33,12 +34,16 @@ export class Minimap {
 
   draw() {
     const c = this.ctx;
-    const k = this.size / W;
+    const k = this.size / PLAY_CELLS;
     const w = this.conn.world;
+    c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, this.size, this.size);
+    // 遊べる範囲が地図いっぱいになるように、上にずらして描く
+    c.setTransform(1, 0, 0, 1, 0, -PLAY_Y0 * k);
     const bs = BLOCK * k;
     for (let by = 0; by < BLOCKS_Y; by++) {
       for (let bx = 0; bx < BLOCKS_X; bx++) {
+        if (!blockInPlay(by * BLOCKS_X + bx)) continue;
         c.fillStyle = w.blocks[by * BLOCKS_X + bx] ? '#e9dcc4' : '#6b625a';
         c.fillRect(bx * bs + 0.5, by * bs + 0.5, bs - 1, bs - 1);
       }

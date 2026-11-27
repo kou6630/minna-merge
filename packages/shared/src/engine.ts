@@ -16,6 +16,22 @@ export const BLOCKS_X = W / BLOCK;
 export const BLOCKS_Y = H / BLOCK;
 /** 最初に開いている区画（左下の 5×5） */
 export const START_BLOCK = (BLOCKS_Y - 1) * BLOCKS_X;
+/**
+ * 遊べる範囲: 左下の PLAY_BLOCKS×PLAY_BLOCKS 区画（50×50マス）。右と上は使わない。
+ * マスの番号は 100×100 のままなので、前のセーブもそのまま読める
+ */
+export const PLAY_BLOCKS = 10;
+/** 遊べる範囲のマスの数（1辺） */
+export const PLAY_CELLS = PLAY_BLOCKS * BLOCK;
+/** 遊べる範囲のいちばん上の行（マス） */
+export const PLAY_Y0 = H - PLAY_CELLS;
+export function blockInPlay(idx: number): boolean {
+  const bx = idx % BLOCKS_X;
+  const up = BLOCKS_Y - 1 - Math.floor(idx / BLOCKS_X);
+  return bx < PLAY_BLOCKS && up < PLAY_BLOCKS && idx >= 0 && idx < BLOCKS_X * BLOCKS_Y;
+}
+/** 区画の数がもとの 400 から減った分、シャッターの難しさの上がり方を早める（4倍だと前と同じ。少しやさしく3倍） */
+const SHUTTER_PACE = 3;
 
 export type Item = {
   id: number;
@@ -319,7 +335,7 @@ function openNeighborBoxes(world: World, cell: number, ops: Op[]) {
 export function blockOuterness(idx: number): number {
   const x = idx % BLOCKS_X;
   const y = BLOCKS_Y - 1 - Math.floor(idx / BLOCKS_X);
-  return Math.min(1, Math.hypot(x, y) / Math.hypot(BLOCKS_X - 1, BLOCKS_Y - 1));
+  return Math.min(1, Math.hypot(x, y) / Math.hypot(PLAY_BLOCKS - 1, PLAY_BLOCKS - 1));
 }
 
 /**
@@ -697,7 +713,7 @@ export function frontierBlocks(blocks: Uint8Array, taken: Set<number>): number[]
   const out: number[] = [];
   const isOpen = (x: number, y: number) => x >= 0 && y >= 0 && x < BLOCKS_X && y < BLOCKS_Y && blocks[y * BLOCKS_X + x] === 1;
   for (let i = 0; i < blocks.length; i++) {
-    if (blocks[i] || taken.has(i)) continue;
+    if (blocks[i] || taken.has(i) || !blockInPlay(i)) continue;
     const bx = i % BLOCKS_X;
     const by = Math.floor(i / BLOCKS_X);
     if (isOpen(bx - 1, by) || isOpen(bx + 1, by) || isOpen(bx, by - 1) || isOpen(bx, by + 1)) out.push(i);
@@ -710,23 +726,31 @@ export function frontierBlocks(blocks: Uint8Array, taken: Set<number>): number[]
  * level: いちばん進んでいる人のレベル / opened: 開いている区画の数（最初は1）
  * 最初のシャッターは、だれでも作れる2段目のパンを COMMON_FIRST_COUNT 個
  */
-export function shutterNeed(level: number, opened: number, rng: Rng): { kind: number; count: number } {
+export function shutterNeed(level: number, opened: number, rng: Rng, avoid: Set<number> = new Set()): { kind: number; count: number } {
   let kind: number;
+  // 区画が99枚になったので、開いた数を SHUTTER_PACE 倍にして、最後のシャッターの難しさを前に近づける
+  const pace = 1 + (opened - 1) * SHUTTER_PACE;
   if (opened <= 1) {
     kind = kindOf('bread', 2);
   } else {
     const chains = unlockedChains(level);
-    const maxT = Math.min(7, 2 + Math.floor(level / 3) + Math.floor(opened / 15));
-    const minT = Math.max(2, Math.min(maxT, 2 + Math.floor(opened / 25)));
-    const chain = chains[Math.floor(rng() * chains.length)] ?? 'bread';
-    const tier = Math.min(minT + Math.floor(rng() * rng() * (maxT - minT + 1)), maxTierOfKind(kindOf(chain, 1)));
-    kind = kindOf(chain, tier);
+    const maxT = Math.min(7, 2 + Math.floor(level / 3) + Math.floor(pace / 15));
+    const minT = Math.max(2, Math.min(maxT, 2 + Math.floor(pace / 25)));
+    const pick = () => {
+      const chain = chains[Math.floor(rng() * chains.length)] ?? 'bread';
+      const tier = Math.min(minT + Math.floor(rng() * rng() * (maxT - minT + 1)), maxTierOfKind(kindOf(chain, 1)));
+      return kindOf(chain, tier);
+    };
+    // ほかのシャッターと同じ物はなるべく頼まない
+    kind = pick();
+    for (let i = 0; i < 12 && avoid.has(kind); i++) kind = pick();
   }
-  return { kind, count: commonCount(kind % 100, opened) };
+  return { kind, count: commonCount(kind % 100, pace) };
 }
 
 export function makeWorldOrder(world: World, block: number, rng: Rng): WorldOrder {
-  const { kind, count } = shutterNeed(worldLevel(world), openCount(world), rng);
+  const avoid = new Set(world.worldOrders.flatMap((o) => o.needs.map((n) => n.kind)));
+  const { kind, count } = shutterNeed(worldLevel(world), openCount(world), rng, avoid);
   const owner = OWNER_OF_CHAIN[chainOfKind(kind).key] ?? 'bread';
   return { id: world.nextWorldOrderId++, block, owner, needs: [{ kind, count, have: 0 }], contributors: {} };
 }
@@ -734,9 +758,9 @@ export function makeWorldOrder(world: World, block: number, rng: Rng): WorldOrde
 /** 開いた所のとなりのシャッター全部に、依頼を付ける */
 export function ensureWorldOrders(world: World, rng: Rng): Op[] {
   const ops: Op[] = [];
-  // 開いてしまった区画の依頼は消す
+  // 開いてしまった区画と、遊べる範囲の外の依頼は消す
   for (const o of [...world.worldOrders]) {
-    if (world.blocks[o.block]) {
+    if (world.blocks[o.block] || !blockInPlay(o.block)) {
       world.worldOrders = world.worldOrders.filter((x) => x !== o);
       ops.push({ t: 'worldOrderDone', id: o.id });
     }

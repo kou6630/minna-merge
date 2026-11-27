@@ -1,7 +1,7 @@
 // 見つかった不具合の再発防止
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeOrder, SECOND_ITEM_TIER, producedChains, secondItemChance,
+import { makeOrder, blockInPlay, START_BLOCK, frontierBlocks, SECOND_ITEM_TIER, producedChains, secondItemChance,
   CHAPTERS, ENERGY_MAX, GEN_WORK_TIER, LEVEL_UP_ENERGY, addPlayer, apply, applyOps, canOrder, cellAt, cloneWorld, createWorld, emptyWorld,
   chainOfKind, fromJson, halfEnergy, isGeneratorKind, kindOf, maxCharges, maxTierOfKind, mulberry32, ownedGeneratorKeys, toJson, xpToNext,
 } from '../src/index.ts';
@@ -154,4 +154,16 @@ test('読み込むと、まだ取り出していない箱のピザなどは、�
   assert.notEqual(chainOfKind(k).key, 'pizza');
   assert.equal(k % 100, 2);
   assert.equal(w2.items.get(out.id)!.kind, kindOf('pizza', 2));
+});
+
+test('遊べる範囲は左下の 10×10 区画（シャッター99枚）。外にはシャッターの依頼が出ない', () => {
+  let n = 0;
+  for (let i = 0; i < 400; i++) if (blockInPlay(i)) n++;
+  assert.equal(n, 100);
+  assert.ok(blockInPlay(START_BLOCK));
+  assert.ok(!blockInPlay(START_BLOCK + 10));
+  assert.ok(!blockInPlay(START_BLOCK - 20 * 10));
+  const all = new Uint8Array(400).fill(1);
+  for (let i = 0; i < 400; i++) if (!blockInPlay(i)) all[i] = 0;
+  assert.deepEqual(frontierBlocks(all, new Set()), []);
 });

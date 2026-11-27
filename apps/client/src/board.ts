@@ -1,7 +1,7 @@
 // 盤面の描画（PixiJS）。ルールは持たず、ops を受けて見た目を合わせるだけ。
 import { Application, Container, Graphics, Sprite, Text, TilingSprite } from 'pixi.js';
 import type { Texture, Ticker } from 'pixi.js';
-import { BLOCK, BLOCKS_X, GIFTS, H, W, cellX, cellY, isGeneratorKind, isGiftKind, isWorkingGenerator, maxTierOfKind, tierOfKind, waitingShutters } from '@minna/shared';
+import { BLOCK, BLOCKS_X, GIFTS, H, PLAY_CELLS, PLAY_Y0, W, blockInPlay, cellX, cellY, isGeneratorKind, isGiftKind, isWorkingGenerator, maxTierOfKind, tierOfKind, waitingShutters } from '@minna/shared';
 import type { CursorInfo, GameEvent, Item, Op, World, WorldOrder } from '@minna/shared';
 import { Tweens, ease } from './tween.ts';
 
@@ -141,7 +141,9 @@ export class Board {
 
   zoomAt(sx: number, sy: number, factor: number) {
     const before = this.cam.toLocal({ x: sx, y: sy });
-    const s = Math.min(2, Math.max(0.12, this.cam.scale.x * factor));
+    // いちばん小さくしたとき、遊べる範囲（50×50マス）が画面にちょうど収まるくらいまで
+    const fit = (Math.min(this.app.screen.width, this.app.screen.height) * 0.9) / (PLAY_CELLS * CELL);
+    const s = Math.min(2, Math.max(Math.min(0.5, fit), this.cam.scale.x * factor));
     this.cam.scale.set(s);
     this.cam.x = sx - before.x * s;
     this.cam.y = sy - before.y * s;
@@ -151,15 +153,20 @@ export class Board {
   /** 盤面が画面の外へ行きすぎないようにする */
   private clampCam() {
     const s = this.cam.scale.x;
-    const mw = W * CELL * s;
-    const mh = H * CELL * s;
+    // 遊べる範囲（左下の 50×50マス）の中だけ映す
+    const mw = PLAY_CELLS * CELL * s;
+    const mh = PLAY_CELLS * CELL * s;
+    const oy = PLAY_Y0 * CELL * s;
     const sw = this.app.screen.width;
     const sh = this.app.screen.height;
     const m = 200;
     this.cam.x = Math.min(m, Math.max(sw - mw - m, this.cam.x));
-    this.cam.y = Math.min(m, Math.max(sh - mh - m, this.cam.y));
+    this.cam.y = Math.min(m - oy, Math.max(sh - mh - m - oy, this.cam.y));
+    // 遊べる範囲が画面より小さいときは、はみ出さないようにする（とても小さいときは真ん中）
     if (mw + m * 2 < sw) this.cam.x = (sw - mw) / 2;
-    if (mh + m * 2 < sh) this.cam.y = (sh - mh) / 2;
+    else if (mw <= sw) this.cam.x = Math.min(sw - mw, Math.max(0, this.cam.x));
+    if (mh + m * 2 < sh) this.cam.y = (sh - mh) / 2 - oy;
+    else if (mh <= sh) this.cam.y = Math.min(sh - mh - oy, Math.max(-oy, this.cam.y));
   }
 
   // ---------- 地面 ----------
@@ -169,6 +176,11 @@ export class Board {
     const c = new Container();
     c.position.set((idx % BLOCKS_X) * BLOCK * CELL, Math.floor(idx / BLOCKS_X) * BLOCK * CELL);
     const size = BLOCK * CELL;
+    // 遊べる範囲の外は何も描かない
+    if (!blockInPlay(idx)) {
+      this.blockViews[idx] = c;
+      return;
+    }
     if (this.src.world.blocks[idx]) {
       const g = new TilingSprite({ texture: this.tex.ground, width: size, height: size });
       g.tileScale.set(size / this.tex.ground.width);
