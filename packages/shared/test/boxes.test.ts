@@ -1,7 +1,7 @@
 // マスのダンボール: 半開きは動かせないが同じアイテムで合成でき、使えるようになると上下左右が半開きになる
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BLOCK, BLOCKS_X, addPlayer, apply, cellAt, createWorld, isGeneratorKind, kindOf, mulberry32, openBlock, START_BLOCK, tierOfKind } from '../src/index.ts';
+import { chainOfKind, BLOCK, BLOCKS_X, addPlayer, apply, cellAt, createWorld, isGeneratorKind, kindOf, mulberry32, openBlock, START_BLOCK, tierOfKind } from '../src/index.ts';
 import type { Item, World } from '../src/index.ts';
 
 const T0 = 1_000_000;
@@ -67,8 +67,11 @@ test('1つの区画のダンボールの中身は、全部ちがうアイテム�
     const inStart = [...w.items.values()].filter((i) => i.boxed || i.dusty);
     assert.equal(inStart.length, 21);
     assert.equal(new Set(inStart.map((i) => i.kind)).size, 21, '最初の区画の21個は全部ちがう');
-    // 2×2 のとなりの箱は、段階1か2
-    for (const c of [cellAt(2, 98), cellAt(0, 97), cellAt(1, 97)]) assert.ok((w.items.get(w.cells[c]!)!.kind % 100) <= 2);
+    // 2×2 のとなりの箱は、今作れるパンの低い段階（取り出すのに同じ物を重ねるので）
+    for (const c of [cellAt(2, 98), cellAt(0, 97), cellAt(1, 97)]) {
+      const k = w.items.get(w.cells[c]!)!.kind;
+      assert.ok(chainOfKind(k).key === 'bread' && k % 100 <= 4);
+    }
     // レベル2 になってから開けた区画は、25個全部ちがう
     addPlayer(w, 'a', 'A', T0, mulberry32(seed));
     w.players.get('a')!.level = 2;

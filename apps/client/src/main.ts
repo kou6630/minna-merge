@@ -5,6 +5,7 @@ import { GIFTS, GLOW_ENERGY, H, OWNERS, W, findEmptyNear, isOpenCell, itemName }
 import type { GameEvent } from '@minna/shared';
 import { Board, CELL, playerColor } from './board.ts';
 import { preloadStoryAssets } from './story-iso.ts';
+import { Tutorial } from './tutorial.ts';
 import { loadManifest, loadTextures } from './assets.ts';
 import type { Conn } from './conn.ts';
 import { Hud } from './hud.ts';
@@ -169,6 +170,7 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
   new ResizeObserver(placeUnderHud).observe($('hud'));
   addEventListener('resize', placeUnderHud);
   placeUnderHud();
+  let tutorial: Tutorial | undefined;
   const story = new StoryUi(conn, { previewMode: opts?.previewMode, onToast: (m) => hud.toast(m) });
   // ストーリーの会話・報酬の画面が出ている間は、レベルアップ画面を待たせて、そのあとに出す
   hud.holdLevelUps = () => story.busy();
@@ -229,6 +231,7 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
       let delivery: Extract<GameEvent, { t: 'order' }> | undefined;
       for (const e of events) {
         if (e.t === 'levelup') hud.queueAward(e);
+        if (e.t === 'order' && e.player === conn.me) tutorial?.orderDone();
         if (e.t === 'sold') hud.showUndo(e.kind, e.coins);
         if (e.t === 'unsold') {
           hud.hideUndo();
@@ -346,6 +349,8 @@ async function boot(conn: Conn, opts?: { previewMode?: boolean }) {
   setInterval(refreshOrders, 400);
   story.render(conn.player);
   if (opts?.previewMode) story.open();
+  // はじめての人には、最初の注文を終えるまでチュートリアルを出す
+  if (!opts?.previewMode) tutorial = new Tutorial(board, () => ({ world: conn.world, player: conn.player, now: conn.now() }));
   setInterval(() => {
     hud.update(conn.player);
     hud.refresh(conn.world);

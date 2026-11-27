@@ -144,3 +144,14 @@ test('注文は、自分の発生器から今出る物だけ（パン窯 Lv3 な
   assert.deepEqual(chainsOf(['bread']), ['bread']);
   assert.deepEqual(chainsOf(['bread', 'pizza']), ['bread', 'pizza']);
 });
+
+test('読み込むと、まだ取り出していない箱のピザなどは、作れる物に入れ替わる（取り出した物はそのまま）', () => {
+  const w = setup();
+  const boxed = put(w, kindOf('pizza', 2), 52, 50, { boxed: true });
+  const out = put(w, kindOf('pizza', 2), 50, 50, { owner: 'a' });
+  const w2 = fromJson(toJson(w));
+  const k = w2.items.get(boxed.id)!.kind;
+  assert.notEqual(chainOfKind(k).key, 'pizza');
+  assert.equal(k % 100, 2);
+  assert.equal(w2.items.get(out.id)!.kind, kindOf('pizza', 2));
+});

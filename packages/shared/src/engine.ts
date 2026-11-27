@@ -328,10 +328,11 @@ export function blockOuterness(idx: number): number {
  */
 function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
   const lv = worldLevel(world);
-  const now = new Set(unlockedChains(lv, true));
-  // 次の2つの発生器で出る物も、遠くの箱に入れる（発生器のもらえるレベルは間が空いているので、レベルではなく発生器の数で見る）
-  const nextLv = Object.keys(LEVEL_GRANTS).map(Number).filter((l) => l > lv).sort((a, b) => a - b)[1] ?? MAX_LEVEL;
-  const soon = unlockedChains(nextLv, true).filter((c) => !now.has(c));
+  const now = new Set(unlockedChains(lv));
+  // 次の3つの発生器で出る物も、遠くの箱に入れる（発生器のもらえるレベルは間が空いているので、レベルではなく発生器の数で見る。
+  // 2種類目（ピザなど）は入れないので、3つ先まで見ないと1区画25個が全部ちがう物にならない）
+  const nextLv = Object.keys(LEVEL_GRANTS).map(Number).filter((l) => l > lv).sort((a, b) => a - b)[2] ?? MAX_LEVEL;
+  const soon = unlockedChains(nextLv).filter((c) => !now.has(c));
   // ねらう段階: 左下は 1、右上の角は 7（外側ほど高い）
   const target = 1 + blockOuterness(idx) * 6;
   const scored: { k: number; r: number; e: number }[] = [];
@@ -341,7 +342,8 @@ function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
     for (let t = 1; t <= max; t++) {
       const jitter = rng() * 0.9;
       // r: 選ぶ順（ねらう段階に近い・今作れる物ほど先）。e: 箱に置く順（低い段階ほど手前）
-      scored.push({ k: kindOf(c, t), r: Math.abs(t - target) + later * 1.5 + jitter, e: t + later * 2.5 + jitter });
+      // まだ作れない系統の物は、遠くの箱に置く（取り出すには同じ物が要るので、近くは今作れる物だけ）
+      scored.push({ k: kindOf(c, t), r: Math.abs(t - target) + later * 1.5 + jitter, e: t + later * 5 + jitter });
     }
   }
   const sorted = scored.sort((a, b) => a.r - b.r);
@@ -481,6 +483,39 @@ export function toJson(world: World): WorldJson {
   };
 }
 
+/**
+ * まだ取り出していない箱（ふた付き・半開き）の中の、育てた発生器でしか出ない物（ピザなど）を、
+ * 同じ段階の作れる物に入れ替える（取り出すには同じ物を重ねるので、作れないと区画を広げられない）。
+ * 同じ区画の箱と、なるべく同じ物にならないようにする
+ */
+function swapGrownBoxes(w: World) {
+  const grown = new Set<string>();
+  for (const c of CHAIN_BY_KEY.values()) for (const r of c.gen?.produces ?? []) if (r.minTier) grown.add(r.chain);
+  const chains = unlockedChains(Math.max(1, worldLevel(w)));
+  const blockOf = (cell: number) => Math.floor(cellY(cell) / BLOCK) * BLOCKS_X + Math.floor(cellX(cell) / BLOCK);
+  const used = new Map<number, Set<number>>();
+  const usedIn = (b: number) => {
+    let s = used.get(b);
+    if (!s) used.set(b, (s = new Set()));
+    return s;
+  };
+  for (const it of w.items.values()) if (it.boxed || it.dusty) usedIn(blockOf(it.cell)).add(it.kind);
+  for (const it of w.items.values()) {
+    if (!(it.boxed || it.dusty) || isGeneratorKind(it.kind) || isGiftKind(it.kind)) continue;
+    if (!grown.has(chainOfKind(it.kind).key)) continue;
+    const u = usedIn(blockOf(it.cell));
+    const t = tierOfKind(it.kind);
+    // 最高段階にすると半開きのまま取り出せなくなるので、1つ下まで
+    const cand = chains.map((c) => kindOf(c, Math.max(1, Math.min(t, maxTierOfKind(kindOf(c, 1)) - 1))));
+    const free = cand.filter((k) => !u.has(k));
+    const list = free.length ? free : cand;
+    if (!list.length) continue;
+    const k = list[it.id % list.length]!;
+    u.add(k);
+    it.kind = k;
+  }
+}
+
 export function fromJson(j: WorldJson): World {
   const w = emptyWorld();
   w.rev = j.rev;
@@ -504,6 +539,7 @@ export function fromJson(j: WorldJson): World {
   w.worldOrders = (j.worldOrders ?? []).map(copyWorldOrder);
   w.nextWorldOrderId = j.nextWorldOrderId ?? 1;
   for (const c of freed) openNeighborBoxes(w, c, []);
+  swapGrownBoxes(w);
   return w;
 }
 
@@ -793,6 +829,7 @@ export function worldOrderAtCell(world: World, cell: number): WorldOrder | undef
 export function addPlayer(world: World, id: string, name: string, now: number, rng: Rng = Math.random): Op[] {
   const ops: Op[] = [];
   let p = world.players.get(id);
+  const fresh = !p;
   if (!p) {
     p = fillPlayer({
       id, name, level: 1, xp: 0, energy: ENERGY_MAX, energyAt: now, coins: START_COINS,
@@ -806,11 +843,20 @@ export function addPlayer(world: World, id: string, name: string, now: number, r
     fillPlayer(p);
     const q = p;
     // 自分で作れない物を頼んでいる組（まだ何も渡していない）は、出しなおす
-    const stuck = q.orders.some((o) => o.needs.some((n) => n.have < n.count && !canOrder(q, n.kind)));
+    const made = producedChains(world, q);
+    const stuck = q.orders.some((o) => o.needs.some((n) => n.have < n.count && !canOrder(q, n.kind, made)));
     const untouched = q.orders.every((o) => o.needs.every((n) => n.have === 0));
     if (stuck && untouched) q.orders = [];
   }
   topUpOrders(p, rng, world);
+  // はじめての人の最初の注文は「パン生地1個」（チュートリアルで、パン窯を2回押して合体すれば渡せる）
+  const first = fresh ? p.orders[0] : undefined;
+  if (first) {
+    const kind = kindOf('bread', 2);
+    first.needs = [{ kind, count: 1, have: 0 }];
+    first.coins = orderCoins(kind, 1);
+    first.xp = tierOfKind(kind) * 2;
+  }
   if (ops.length) world.rev++;
   return ops;
 }
