@@ -202,7 +202,7 @@ export const GEM_PER_CHARGES = 10;
 export function genRefillCost(missing: number): number {
   return Math.max(1, Math.ceil(missing / GEM_PER_CHARGES));
 }
-/** 光るカーソル: カーソルはふだん光っている。光っている同士がぶつかると2人ともスタミナ、2人とも15分光らない */
+/** 光るカーソル: ほかの人のカーソルは光っている。ぶつかると2人ともスタミナ。同じ相手とは15分ぶつかれない（ほかの人とはぶつかれる） */
 export const GLOW_COOLDOWN_MS = 15 * 60_000;
 export const GLOW_ENERGY = 20;
 /** ぶつかったとみなす近さ（マス） */

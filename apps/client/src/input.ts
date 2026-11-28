@@ -23,6 +23,10 @@ export class Input {
   private giftBusy = new Set<number>();
   private cursorTimer = 0;
   private pendingCursor: { x: number; y: number } | null = null;
+  /** アイテムを運んでいて画面の端に来たときの、盤面を動かす速さ（1コマあたり） */
+  private edgeV = { x: 0, y: 0 };
+  private edgePt = { x: 0, y: 0 };
+  private edgeRaf = 0;
 
   constructor(
     private el: HTMLElement,
@@ -62,6 +66,38 @@ export class Input {
     return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
   }
 
+  /** アイテムを運んでいて画面の端に近づいたら、その方向へ盤面を動かす（注文などの上では動かさない） */
+  private edgeCheck(e: PointerEvent, cur: { x: number; y: number }, overDom: boolean) {
+    const r = this.el.getBoundingClientRect();
+    const side = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--side')) || 0;
+    // 盤面の絵は画面より広いことがあるので、見えている所の端で見る
+    const left = Math.max(r.left, side);
+    const right = Math.min(r.right, innerWidth);
+    const top = Math.max(r.top, 0);
+    const bottom = Math.min(r.bottom, innerHeight);
+    const Z = 56;
+    // 端からの近さで速さを決める（端の外＝パネルの上では動かさない）
+    const sp = (d: number) => (d < 0 || d >= Z ? 0 : ((Z - d) / Z) * 16);
+    this.edgeV = overDom
+      ? { x: 0, y: 0 }
+      : { x: sp(e.clientX - left) - sp(right - e.clientX), y: sp(e.clientY - top) - sp(bottom - e.clientY) };
+    this.edgePt = cur;
+    if ((this.edgeV.x || this.edgeV.y) && !this.edgeRaf) this.edgeRaf = requestAnimationFrame(this.edgeStep);
+  }
+
+  private edgeStep = () => {
+    this.edgeRaf = 0;
+    const v = this.edgeV;
+    if (this.mode !== 'drag' || !this.dragId || (!v.x && !v.y)) return;
+    this.board.panBy(v.x, v.y);
+    // 指の下にアイテムがついてくるように、運んでいる絵と重ねる先を合わせ直す
+    const p = this.edgePt;
+    this.board.dragTo(this.dragId, p.x, p.y);
+    const cell = this.board.cellAtScreen(p.x, p.y);
+    this.board.hover(cell, this.canMergeInto(cell));
+    this.edgeRaf = requestAnimationFrame(this.edgeStep);
+  };
+
   private move(e: PointerEvent) {
     const prev = this.pointers.get(e.pointerId);
     if (!prev) {
@@ -93,6 +129,7 @@ export class Input {
       }
       const cell = el ? -1 : this.board.cellAtScreen(cur.x, cur.y);
       this.board.hover(cell, this.canMergeInto(cell));
+      this.edgeCheck(e, cur, !!el);
       const now = performance.now();
       if (now - this.lastKeep > 3000) {
         this.lastKeep = now;

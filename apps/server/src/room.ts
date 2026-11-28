@@ -83,7 +83,8 @@ export class Room {
   private cursors = new Map<string, CursorInfo>();
   private cursorQ = new Map<string, CursorInfo>();
   /** 光るカーソル: 次に光る時刻と、光り終わる時刻（光っていなければ 0） */
-  private glows = new Map<string, { coolUntil: number }>();
+  /** 光るカーソル: ぶつかった2人の組ごとのクールダウン（キーは2人の id を並べたもの → 終わる時刻） */
+  private pairCool = new Map<string, number>();
 
   private cfg: Config;
   private savePath: string;
@@ -323,8 +324,6 @@ export class Room {
     this.dirty = true;
     c.playerId = acc.playerId;
     c.lastS = 0;
-    // 最初に光るのは、入ってから 3〜15 分のどこか
-    if (!this.glows.has(acc.playerId)) this.glows.set(acc.playerId, { coolUntil: 0 });
     this.send(c, { t: 'joined', playerId: acc.playerId, token });
     this.welcome(c);
     // 参加中の一覧は、この人を入れた形で次の差分と一緒に全員へ送る
@@ -359,7 +358,6 @@ export class Room {
     };
     // 盤面は1人ずつ別なので、ほかの人にはカーソルの位置だけ見せる（つかんでいるアイテムは見せない）
     if (Number.isInteger(d)) extendHold(this.worldOf(pid), pid, d as number, Date.now());
-    if (this.glowing(pid)) info.g = 1;
     const prev = this.cursors.get(pid);
     this.cursors.set(pid, info);
     this.cursorQ.set(pid, info);
@@ -368,36 +366,31 @@ export class Room {
 
   // ---------- 光るカーソル ----------
 
-  /** カーソルが光っているか（ふだんは光っていて、ぶつかったあと15分だけ消える） */
-  private glowing(pid: string) {
-    return (this.glows.get(pid)?.coolUntil ?? 0) === 0;
+  private pairKey(a: string, b: string) {
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
   }
 
-  private setGlow(pid: string, on: boolean) {
-    const cur = this.cursors.get(pid);
-    if (!cur) return;
-    const info = { ...cur };
-    if (on) info.g = 1;
-    else delete info.g;
-    this.cursors.set(pid, info);
-    this.cursorQ.set(pid, info);
+  /** a と b がぶつかれるか（その2人の組のクールダウンが終わっている）。ほかの人とはいつでもぶつかれる */
+  private pairReady(a: string, b: string, now = Date.now()) {
+    return (this.pairCool.get(this.pairKey(a, b)) ?? 0) <= now;
   }
 
-  /** クールダウンが明けたら、また光らせる */
+  /** クールダウンが明けた組は、おたがいのカーソルをまた光らせる（送り直す） */
   private tickGlows(now: number) {
-    for (const [pid, g] of this.glows) {
-      if (!g.coolUntil || now < g.coolUntil) continue;
-      g.coolUntil = 0;
-      this.setGlow(pid, true);
-      if (this.onlineIds().includes(pid)) this.queue(pid, [], [{ t: 'glow', player: pid }]);
+    for (const [k, until] of this.pairCool) {
+      if (until > now) continue;
+      this.pairCool.delete(k);
+      for (const pid of k.split('|')) {
+        const cur = this.cursors.get(pid);
+        if (cur) this.cursorQ.set(pid, cur);
+      }
     }
   }
 
-  /** pid のカーソルが a から b へ動いた。光っている同士でぶつかったら、2人ともスタミナをもらい、2人とも15分光らない */
+  /** pid のカーソルが a から b へ動いた。まだぶつかっていない相手（組ごとに15分）とぶつかったら、2人ともスタミナ */
   private checkBump(pid: string, a: CursorInfo, b: CursorInfo, now: number) {
-    if (!this.glowing(pid)) return;
     for (const [q, o] of this.cursors) {
-      if (q === pid || !this.glowing(q)) continue;
+      if (q === pid || o.gone || !this.pairReady(pid, q, now)) continue;
       if (segDist(a.x, a.y, b.x, b.y, o.x, o.y) > GLOW_HIT_R) continue;
       for (const [me, other] of [[pid, q], [q, pid]] as const) {
         const p = this.player(me);
@@ -407,9 +400,11 @@ export class Room {
           if (p.energy >= ENERGY_MAX) p.energyAt = now;
           this.queue(me, [], [{ t: 'bump', player: me, from: other, energy: GLOW_ENERGY }], [me]);
         }
-        this.glows.set(me, { coolUntil: now + GLOW_COOLDOWN_MS });
-        this.setGlow(me, false);
+        // おたがいのカーソルを送り直す（この2人の間だけ光らなくなる）
+        const cur = this.cursors.get(me);
+        if (cur) this.cursorQ.set(me, cur);
       }
+      this.pairCool.set(this.pairKey(pid, q), now + GLOW_COOLDOWN_MS);
       this.dirty = true;
       this.log(`光るカーソル: ${this.player(pid)?.name ?? '?'} と ${this.player(q)?.name ?? '?'} がぶつかった（2人ともスタミナ+${GLOW_ENERGY}）`);
       return;
@@ -549,7 +544,12 @@ export class Room {
       const b: Batch = {
         t: 'batch', rev0: this.sentRev.get(pid) ?? w.rev, rev: w.rev,
         ops: q?.ops ?? [], events: q?.events ?? [], players,
-        acks: c.acks, rejects: c.rejects, online, cursors: cursors?.filter((x) => x.p !== pid),
+        acks: c.acks, rejects: c.rejects, online,
+        // 光るのは、見ている人がまだぶつかれる相手のカーソルだけ（人ごとにクールダウンがちがう）
+        cursors: cursors?.filter((x) => x.p !== pid).map((x) => {
+          const { g: _g, ...rest } = x;
+          return !x.gone && pid && this.pairReady(pid, x.p) ? { ...rest, g: 1 as const } : rest;
+        }),
       };
       this.send(c, b);
       c.acks = [];

@@ -422,7 +422,7 @@ test('あとから入った人も、参加中の人数に数えられる', async
   await room.stop();
 });
 
-test('光るカーソル: ふだんは光っていて、光っている同士がぶつかると2人ともスタミナ+20、2人とも15分光らない', async () => {
+test('光るカーソル: ほかの人のカーソルは光っていて、ぶつかると2人ともスタミナ+20。その2人の間だけ15分光らない', async () => {
   const { room, port } = await startRoom();
   const a = new Bot(port);
   const b = new Bot(port);
@@ -442,7 +442,7 @@ test('光るカーソル: ふだんは光っていて、光っている同士が
   const ha = await a.waitFor((x) => isBatch(x) && x.events.some((e) => e.t === 'bump'));
   assert.ok(isBatch(hb) && hb.players.some((p) => p.id === jb.playerId && p.energy === eb + 20));
   assert.ok(isBatch(ha) && ha.players.some((p) => p.id === ja.playerId && p.energy === ea + 20));
-  // 2人とも光が消える
+  // おたがいの光が消える
   assert.ok(isBatch(hb) && hb.cursors!.some((c) => c.p === ja.playerId && !c.g));
   assert.ok(isBatch(ha) && ha.cursors!.some((c) => c.p === jb.playerId && !c.g));
   // クールダウン中は、もう一度ぶつかっても何もない
@@ -451,32 +451,43 @@ test('光るカーソル: ふだんは光っていて、光っている同士が
   assert.equal(energy(ja.playerId), ea + 20);
   assert.equal(energy(jb.playerId), eb + 20);
   // 15分たつと、また光る
-  const glows = (room as unknown as { glows: Map<string, { coolUntil: number }> }).glows;
-  assert.ok(glows.get(ja.playerId)!.coolUntil - Date.now() > 14 * 60_000);
-  glows.get(ja.playerId)!.coolUntil = Date.now();
-  await a.waitFor((x) => isBatch(x) && x.events.some((e) => e.t === 'glow'));
+  const cool = (room as unknown as { pairCool: Map<string, number> }).pairCool;
+  const [key] = [...cool.keys()];
+  assert.ok(cool.get(key!)! - Date.now() > 14 * 60_000);
+  cool.set(key!, Date.now());
   await b.waitFor((x) => isBatch(x) && (x.cursors ?? []).some((c) => c.p === ja.playerId && c.g === 1));
   a.close();
   b.close();
   await room.stop();
 });
 
-test('光るカーソル: 片方がクールダウン中なら、ぶつかっても何もない', async () => {
+test('光るカーソル: クールダウンは人ごと。A と B がぶつかったあとも、C は A とぶつかれる', async () => {
   const { room, port } = await startRoom();
   const a = new Bot(port);
   const b = new Bot(port);
+  const c = new Bot(port);
   const ja = await a.join('Aさん');
   const jb = await b.join('Bさん');
-  const glows = (room as unknown as { glows: Map<string, { coolUntil: number }> }).glows;
-  glows.get(jb.playerId)!.coolUntil = Date.now() + 60_000;
+  const jc = await c.join('Cさん');
+  const cool = (room as unknown as { pairCool: Map<string, number> }).pairCool;
+  const key = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
+  cool.set(key(ja.playerId, jb.playerId), Date.now() + 60_000);
+  c.send({ t: 'cursor', x: 40, y: 40 });
   a.send({ t: 'cursor', x: 10, y: 10 });
-  await b.waitFor((x) => isBatch(x) && (x.cursors ?? []).some((c) => c.p === ja.playerId));
-  const eb = room.worlds.get(jb.playerId)!.players.get(jb.playerId)!.energy;
+  await c.waitFor((x) => isBatch(x) && (x.cursors ?? []).some((v) => v.p === ja.playerId && v.g === 1));
+  const energy = (pid: string) => room.worlds.get(pid)!.players.get(pid)!.energy;
+  const eb = energy(jb.playerId);
+  const ec = energy(jc.playerId);
+  // B は A とクールダウン中なので何もない
   b.send({ t: 'cursor', x: 10, y: 10 });
   await new Promise((r) => setTimeout(r, 200));
-  assert.equal(room.worlds.get(jb.playerId)!.players.get(jb.playerId)!.energy, eb);
-  assert.equal(glows.get(ja.playerId)!.coolUntil, 0);
+  assert.equal(energy(jb.playerId), eb);
+  // C は A とぶつかれる
+  c.send({ t: 'cursor', x: 10, y: 10 });
+  await c.waitFor((x) => isBatch(x) && x.events.some((e) => e.t === 'bump'));
+  assert.equal(energy(jc.playerId), ec + 20);
   a.close();
   b.close();
+  c.close();
   await room.stop();
 });
