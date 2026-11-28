@@ -5,7 +5,7 @@ import {
   OWNER_OF_CHAIN, orderCustomerCount, orderDoubleCount, SPAWN_RADIUS, WORLD_ORDER_BONUS, WORLD_ORDER_SLOTS, START_COINS, STORAGE_MAX, STORAGE_START, chainOfKind, isGeneratorKind, kindOf,
   GIFTS, secondItemChance, STORY_CLEAR_GIFTS, STORY_HALF_GIFTS, UNDO_SELL_MS, cappedClearXp, commonCount, isGiftKind, levelGiftTiers, maxTierOfKind, mergeXp, scrapCoins, sellCoins, storageCost, tierOfKind, xpToNext,
 } from './defs.ts';
-import { copyStory, defaultStory, findStoryTask, getChapter, halfEnergy, isChapterComplete, isChapterHalf } from './story.ts';
+import { copyStory, defaultStory, findStoryTask, getChapter, halfEnergy, storyEnergy, isChapterComplete, isChapterHalf } from './story.ts';
 import type { StoryProgress } from './story.ts';
 
 export const W = 100;
@@ -1660,10 +1660,11 @@ function applyInner(world: World, p: Player, a: Action, now: number, rng: Rng): 
         const gift = clearTier ? giveReward(p, kindOf('gift', clearTier)) : undefined;
         // 経験値はだれでも同じ。ただし1回で上がるのは1レベルまで（止まったときは、実際に入った分を知らせる）
         const xp = cappedClearXp(p.level, p.xp, rw.xp);
-        events.push({ t: 'chapterClear', player: p.id, chapter: chapter.id, xp, energy: rw.energy, gems: rw.gems, ...(part ? { part } : {}), ...(gift ? { gift } : {}) });
+        const energy = storyEnergy(chapter);
+        events.push({ t: 'chapterClear', player: p.id, chapter: chapter.id, xp, energy, gems: rw.gems, ...(part ? { part } : {}), ...(gift ? { gift } : {}) });
         // 先に経験値（レベルアップのスタミナ +20 が、報酬のスタミナで満タンをこえて消えないように）
         gainXp(world, p, xp, now, ops, events);
-        p.energy += rw.energy;
+        p.energy += energy;
         if (p.energy >= ENERGY_MAX) p.energyAt = now;
       }
       return done();

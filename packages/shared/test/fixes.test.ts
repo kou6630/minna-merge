@@ -1,7 +1,7 @@
 // 見つかった不具合の再発防止
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeOrder, blockInPlay, START_BLOCK, frontierBlocks, SECOND_ITEM_TIER, producedChains, secondItemChance,
+import { makeOrder, storyEnergy, blockInPlay, START_BLOCK, frontierBlocks, SECOND_ITEM_TIER, producedChains, secondItemChance,
   CHAPTERS, ENERGY_MAX, GEN_WORK_TIER, LEVEL_UP_ENERGY, addPlayer, apply, applyOps, canOrder, cellAt, cloneWorld, createWorld, emptyWorld,
   chainOfKind, fromJson, halfEnergy, isGeneratorKind, kindOf, maxCharges, maxTierOfKind, mulberry32, ownedGeneratorKeys, toJson, xpToNext,
 } from '../src/index.ts';
@@ -36,7 +36,7 @@ test('章クリアでレベルが上がると、レベルアップのスタミ�
   for (const t of CHAPTERS[0]!.tasks) assert.ok(apply(w, 'p', { t: 'storyTask', taskId: t.id, choice: t.choices ? 0 : undefined }, T0, r0).ok);
   assert.equal(p.level, 6);
   // 先にレベルアップの +20（満タンまで）、そのあと報酬のスタミナ
-  assert.equal(p.energy, ENERGY_MAX - 60 + halfEnergy(CHAPTERS[0]!) + LEVEL_UP_ENERGY + CHAPTERS[0]!.reward.energy);
+  assert.equal(p.energy, ENERGY_MAX - 60 + halfEnergy(CHAPTERS[0]!) + LEVEL_UP_ENERGY + storyEnergy(CHAPTERS[0]!));
 });
 
 test('発生器どうしの合成: どちらをどちらに重ねても、チャージは同じ（多い方を引きつぎ、時間で回復した分も数える）', () => {

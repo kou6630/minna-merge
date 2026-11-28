@@ -148,8 +148,15 @@ export function copyStory(s?: StoryProgress): StoryProgress {
 }
 
 /** 50% のプレゼント: スタミナ（中）= クリア報酬のスタミナ（大）の半分（5 の倍数） */
+/** ストーリーのスタミナは、章に書いた量の 7 割（多すぎて、ずっと遊べてしまうので）。5 の倍数にそろえる */
+export const STORY_ENERGY_RATE = 0.7;
+export function storyEnergy(ch: StoryChapter): number {
+  return Math.max(5, Math.round((ch.reward.energy * STORY_ENERGY_RATE) / 5) * 5);
+}
+
+/** 50% のごほうびのスタミナ: クリアの半分 */
 export function halfEnergy(ch: StoryChapter): number {
-  return Math.max(5, Math.round(ch.reward.energy / 10) * 5);
+  return Math.max(5, Math.round(storyEnergy(ch) / 10) * 5);
 }
 
 /** チャプターのタスクが半分以上おわったか（進み具合のバーの 50% の箱と同じ判定） */

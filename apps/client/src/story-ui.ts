@@ -1,5 +1,5 @@
 // 商店街復興ストーリー画面（PixiJS 2:1 アイソメトリック空間・マルチフェーズ1〜3＋屋根オープン＋立ち絵会話）
-import {
+import { storyEnergy,
   CHAPTERS, SPEAKERS, STORY_ASSET_V, chainOfKind, currentChapter, itemName, findStoryTask, getChapter, nextStoryTask, portraitSrc,
 } from '@minna/shared';
 import type {
@@ -710,7 +710,7 @@ export class StoryUi {
       : nextCh ? `次は「${nextCh.areaName}」を直しにいこう！` : '商店街がまたひとつ元気になりました！続きのストーリーをお楽しみに！';
     $('storyRewardSub').textContent = `「${ch.areaName}」完了！ ${nextHint}`;
     $('rwXp').textContent = `+${rw.xp}`;
-    $('rwEnergy').textContent = `+${rw.energy}`;
+    $('rwEnergy').textContent = `+${storyEnergy(ch)}`;
     $('rwGems').textContent = `+${rw.gems}`;
     // 発生器の部品とプレゼント箱（マージ画面の左下の受け取り枠に入る）
     this.showPart(part);

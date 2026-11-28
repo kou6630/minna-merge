@@ -204,7 +204,7 @@ export function genRefillCost(missing: number): number {
 }
 /** 光るカーソル: ほかの人のカーソルは光っている。ぶつかると2人ともスタミナ。同じ相手とは15分ぶつかれない（ほかの人とはぶつかれる） */
 export const GLOW_COOLDOWN_MS = 15 * 60_000;
-export const GLOW_ENERGY = 20;
+export const GLOW_ENERGY = 5;
 /** ぶつかったとみなす近さ（マス） */
 export const GLOW_HIT_R = 1;
 export const START_COINS = 0;
