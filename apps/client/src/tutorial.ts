@@ -1,6 +1,7 @@
-// はじめての人向けのチュートリアル: 最初の注文を1つ終えるまで、レイナがやることを1つずつ教える。
+// チュートリアル: 遊び方を、レイナが1つずつ教える（だれでも、そのブラウザで1回）。
+// あいさつ → パン窯をタップ → 合体 → 注文に渡す → シャッター → 倉庫 の順。
 // 画面を少し暗くして、やる所だけ明るくする。操作はふさがない（どこを押しても遊べる）。
-import { STORY_ASSET_V, chainOfKind, isGeneratorKind, isGiftKind, maxTierOfKind, tierOfKind } from '@minna/shared';
+import { BLOCK, BLOCKS_X, STORY_ASSET_V, cellAt, chainOfKind, waitingShutters, isGeneratorKind, isGiftKind, maxTierOfKind, tierOfKind } from '@minna/shared';
 import type { Item, Player, World } from '@minna/shared';
 import type { Board } from './board.ts';
 import { matchOrders } from './order-match.ts';
@@ -8,7 +9,8 @@ import { matchOrders } from './order-match.ts';
 type State = { world: World; player: Player | undefined; now: number };
 type Rect = { x: number; y: number; w: number; h: number };
 
-const doneKey = (id: string) => `minna-merge:tutorial:${id}`;
+// 2: 全員にもう一度出す版（前の版を終えた人にも出す）
+const doneKey = (id: string) => `minna-merge:tutorial2:${id}`;
 
 function isDone(id: string): boolean {
   try {
@@ -26,7 +28,11 @@ export class Tutorial {
   private text = document.createElement('p');
   private timer = 0;
   private finished = false;
-  private cheering = false;
+  /** intro: あいさつ / play: 実際にやる（タップ・合体・渡す） / cheer・shutter・storage: 説明して「次へ」 */
+  private phase: 'intro' | 'play' | 'cheer' | 'shutter' | 'storage' = 'intro';
+  private next = document.createElement('button');
+  /** 1回でも合体を教えたか（そのあとは「くり返そう」と言う） */
+  private merged = false;
   /** 合体を教えるときの手の動き（つかむ所 → 重ねる所） */
   private drag: { a: Rect; b: Rect } | null = null;
   private t0 = performance.now();
@@ -36,8 +42,8 @@ export class Tutorial {
     private state: () => State,
   ) {
     const p = state().player;
-    // はじめての人だけ（まだ注文を1回も全部終えていない、低いレベル、まだ終えていない）
-    if (!p || p.orderClears > 0 || p.level > 2 || isDone(p.id)) return;
+    // そのブラウザで、まだ見ていない人
+    if (!p || isDone(p.id)) return;
     this.root.className = 'tut';
     this.svg.setAttribute('class', 'tut-dim');
     this.hand.className = 'tut-hand';
@@ -51,11 +57,14 @@ export class Tutorial {
     skip.className = 'tut-skip';
     skip.textContent = 'スキップ';
     skip.onclick = () => this.finish();
+    this.next.type = 'button';
+    this.next.className = 'btn btn-small tut-next';
+    this.next.onclick = () => this.advance();
     const body = document.createElement('div');
     body.className = 'tut-body';
     const who = document.createElement('b');
     who.textContent = 'レイナ';
-    body.append(who, this.text);
+    body.append(who, this.text, this.next);
     this.bubble.append(face, body, skip);
     this.root.append(this.svg, this.hand, this.bubble);
     document.body.appendChild(this.root);
@@ -71,14 +80,18 @@ export class Tutorial {
 
   /** 自分の注文が1つ終わった */
   orderDone() {
-    if (this.finished || this.cheering || !this.timer) return;
-    this.cheering = true;
-    this.spot([]);
-    this.hand.hidden = true;
-    this.text.textContent = 'やったね！コインがもらえたよ。このコインで、商店街を少しずつ直していこう！';
-    const ok = this.bubble.querySelector('.tut-skip') as HTMLButtonElement;
-    ok.textContent = 'OK';
-    window.setTimeout(() => this.finish(), 6000);
+    if (this.finished || !this.timer || this.phase !== 'play') return;
+    this.phase = 'cheer';
+    this.update();
+  }
+
+  /** 「次へ」 */
+  private advance() {
+    if (this.phase === 'intro') this.phase = 'play';
+    else if (this.phase === 'cheer') this.phase = 'shutter';
+    else if (this.phase === 'shutter') this.phase = 'storage';
+    else return this.finish();
+    this.update();
   }
 
   private finish() {
@@ -105,14 +118,47 @@ export class Tutorial {
   }
 
   private update() {
-    if (this.finished || this.cheering) return;
+    if (this.finished) return;
     const { world, player: p, now } = this.state();
     if (!p) return;
-    if (p.orderClears > 0) return this.finish();
     // ストーリーやほかの画面を開いているときは隠す
     const busy = document.getElementById('storyView')?.hidden === false || !!document.querySelector('.modal:not([hidden])');
     this.root.hidden = busy;
     if (busy) return;
+    this.next.hidden = this.phase === 'play';
+    this.next.textContent = this.phase === 'storage' ? 'はじめる！' : '次へ';
+    this.drag = null;
+    if (this.phase === 'intro') {
+      this.say('ようこそ、みんなの商店街へ！わたしはレイナ。ここでの遊び方を教えるね');
+      this.spot([]);
+      return this.point(null);
+    }
+    if (this.phase === 'cheer') {
+      this.say('やったね！注文を渡すと、コインと経験値がもらえるよ');
+      const r = document.querySelector('.pill:has(img[src*="coin"])')?.getBoundingClientRect();
+      this.spot(r ? [{ x: r.left, y: r.top, w: r.width, h: r.height }] : []);
+      return this.point(null);
+    }
+    if (this.phase === 'shutter') {
+      // いちばん近い、今進んでいるシャッター
+      const waiting = waitingShutters(world.worldOrders);
+      const o = world.worldOrders.filter((x) => !waiting.has(x.id)).sort((a, b) => a.block - b.block).pop() ?? world.worldOrders[0];
+      this.say('シャッターに描いてあるアイテムを注文でお客さんに渡すと、シャッターの数が進むよ。そろうと、みんなで新しい区画が開けられるよ！');
+      if (o) {
+        const x0 = (o.block % BLOCKS_X) * BLOCK; const y0 = Math.floor(o.block / BLOCKS_X) * BLOCK;
+        const a = this.cellRect(cellAt(x0, y0)); const b = this.cellRect(cellAt(x0 + BLOCK - 1, y0 + BLOCK - 1));
+        const r = { x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y };
+        this.spot([r]);
+      } else this.spot([]);
+      return this.point(null);
+    }
+    if (this.phase === 'storage') {
+      this.say('盤面がいっぱいになったら、アイテムを倉庫にしまっておけるよ。倉庫からはドラッグで出せるよ。さあ、はじめよう！');
+      const r = document.getElementById('storageBtn')?.getBoundingClientRect();
+      const rr = r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+      this.spot(rr ? [rr] : []);
+      return this.point(rr);
+    }
 
     // 3. 注文に出せる物がそろった → 注文カード
     const m = matchOrders(p, world, now);
@@ -120,7 +166,6 @@ export class Tutorial {
     if (ready) {
       const card = document.querySelector(`[data-order="${ready.id}"]`) as HTMLElement | null;
       const r = card?.getBoundingClientRect();
-      this.drag = null;
       this.say('できた！お客さんの注文のところまで運んでね。「完了」を押してもOKだよ');
       this.spot(r ? [{ x: r.left, y: r.top, w: r.width, h: r.height }] : []);
       this.point(r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null);
@@ -135,16 +180,19 @@ export class Tutorial {
       this.say('同じものを重ねると合体するよ！片方をつかんで、もう片方の上で離してね');
       this.spot([a, b]);
       this.drag = { a, b };
+      this.merged = true;
       this.hand.hidden = false;
       return;
     }
 
-    // 1. パン窯をタップ
-    const gen = [...world.items.values()].find((i) => i.owner === p.id && isGeneratorKind(i.kind) && chainOfKind(i.kind).key === 'oven' && tierOfKind(i.kind) >= 3);
-    this.drag = null;
+    // 1. 発生器をタップ（パン窯があればパン窯）
+    const gens = [...world.items.values()].filter((i) => i.owner === p.id && isGeneratorKind(i.kind) && tierOfKind(i.kind) >= 3);
+    const gen = gens.find((i) => chainOfKind(i.kind).key === 'oven') ?? gens[0];
     if (gen) {
       const r = this.cellRect(gen.cell);
-      this.say('まずはパン窯をタップしてみて！小麦粉が出てくるよ');
+      this.say(this.merged
+        ? '注文に描いてあるアイテムができるまで、タップと合体をくり返そう！'
+        : chainOfKind(gen.kind).key === 'oven' ? 'まずはパン窯をタップしてみて！小麦粉が出てくるよ' : 'まずは発生器をタップしてみて！アイテムが出てくるよ');
       this.spot([r]);
       this.point(r);
     } else {

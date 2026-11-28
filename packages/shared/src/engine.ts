@@ -343,6 +343,8 @@ export function blockOuterness(idx: number): number {
  * 右上（外側）の区画ほど、高い段階の物が入る。低い段階から順に並べて返す（近いマスほど簡単な物にするため）。
  */
 function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
+  // 最初の区画と、最初のシャッターの区画は、パンだけ（パン窯だけで取り出せるように）。近い箱ほど低い段階
+  if (openCount(world) <= EARLY_BREAD_BLOCKS) return earlyBread(n);
   const lv = worldLevel(world);
   const now = new Set(unlockedChains(lv));
   // 次の3つの発生器で出る物も、遠くの箱に入れる（発生器のもらえるレベルは間が空いているので、レベルではなく発生器の数で見る。
@@ -370,6 +372,16 @@ function boxContents(world: World, idx: number, n: number, rng: Rng): number[] {
   const gens = ownedGeneratorKeys(lv);
   if (n >= 10 && gens.length && rng() < 0.7) kinds[n - 1] = kindOf(gens[Math.floor(rng() * gens.length)]!, 1);
   return kinds;
+}
+
+/** 最初の区画と、最初のシャッターの区画（開いた数がここまでのとき）は、箱の中身をパンだけにする */
+const EARLY_BREAD_BLOCKS = 2;
+
+/** パンだけの箱の中身: 段階1〜4 を、近い箱ほど低くなるように */
+function earlyBread(n: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) out.push(kindOf('bread', 1 + Math.floor((i * 4) / Math.max(1, n))));
+  return out;
 }
 
 /** そのレベルまでにもらえる発生器 */
@@ -500,6 +512,19 @@ export function toJson(world: World): WorldJson {
 }
 
 /**
+ * まだ最初のシャッターまでしか開いていない盤面: 取り出していない箱（ふた付き・半開き）の中身を、
+ * 同じ段階（1〜4）のパンにする（パン窯だけで取り出せるように）
+ */
+function breadEarlyBoxes(w: World) {
+  if (openCount(w) > EARLY_BREAD_BLOCKS) return;
+  for (const it of w.items.values()) {
+    if (!(it.boxed || it.dusty) || isGeneratorKind(it.kind) || isGiftKind(it.kind)) continue;
+    if (chainOfKind(it.kind).key === 'bread' && tierOfKind(it.kind) <= 4) continue;
+    it.kind = kindOf('bread', Math.min(4, Math.max(1, tierOfKind(it.kind))));
+  }
+}
+
+/**
  * まだ取り出していない箱（ふた付き・半開き）の中の、育てた発生器でしか出ない物（ピザなど）を、
  * 同じ段階の作れる物に入れ替える（取り出すには同じ物を重ねるので、作れないと区画を広げられない）。
  * 同じ区画の箱と、なるべく同じ物にならないようにする
@@ -556,6 +581,7 @@ export function fromJson(j: WorldJson): World {
   w.nextWorldOrderId = j.nextWorldOrderId ?? 1;
   for (const c of freed) openNeighborBoxes(w, c, []);
   swapGrownBoxes(w);
+  breadEarlyBoxes(w);
   return w;
 }
 

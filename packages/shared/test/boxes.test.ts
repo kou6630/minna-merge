@@ -66,17 +66,23 @@ test('1つの区画のダンボールの中身は、全部ちがうアイテム�
     const w = createWorld(mulberry32(seed));
     const inStart = [...w.items.values()].filter((i) => i.boxed || i.dusty);
     assert.equal(inStart.length, 21);
-    assert.equal(new Set(inStart.map((i) => i.kind)).size, 21, '最初の区画の21個は全部ちがう');
+    assert.ok(inStart.every((i) => chainOfKind(i.kind).key === 'bread' && i.kind % 100 <= 4), '最初の区画はパンの段階1〜4だけ');
     // 2×2 のとなりの箱は、今作れるパンの低い段階（取り出すのに同じ物を重ねるので）
     for (const c of [cellAt(2, 98), cellAt(0, 97), cellAt(1, 97)]) {
       const k = w.items.get(w.cells[c]!)!.kind;
       assert.ok(chainOfKind(k).key === 'bread' && k % 100 <= 4);
     }
-    // レベル2 になってから開けた区画は、25個全部ちがう
+    // 最初のシャッターの区画も、パンの段階1〜4だけ
     addPlayer(w, 'a', 'A', T0, mulberry32(seed));
     w.players.get('a')!.level = 2;
     openBlock(w, START_BLOCK - 20, mulberry32(seed + 10));
-    const bx = 0; const by = 90;
+    for (let y = 90; y < 95; y++) for (let x = 0; x < 5; x++) {
+      const k = w.items.get(w.cells[cellAt(x, y)]!)!.kind;
+      assert.ok(isGeneratorKind(k) || (chainOfKind(k).key === 'bread' && k % 100 <= 4), '最初のシャッターの区画はパンだけ');
+    }
+    // その次に開けた区画からは、25個全部ちがう
+    openBlock(w, START_BLOCK + 1, mulberry32(seed + 20));
+    const bx = 5; const by = 95;
     const kinds: number[] = [];
     for (let y = by; y < by + 5; y++) for (let x = bx; x < bx + 5; x++) kinds.push(w.items.get(w.cells[cellAt(x, y)]!)!.kind);
     assert.equal(new Set(kinds).size, 25, '次の区画の25個は全部ちがう');
@@ -89,6 +95,7 @@ test('右上（外側）の区画ほど、ダンボールの中身の段階が�
     addPlayer(w, 'a', 'A', T0, mulberry32(12));
     w.players.get('a')!.level = lv;
     const by = 19 - byFromBottom;
+    w.blocks[START_BLOCK - 20] = 1; // 最初のパンだけの区画は過ぎたことにする
     openBlock(w, by * BLOCKS_X + bx, mulberry32(13));
     const kinds: number[] = [];
     for (let y = by * BLOCK; y < by * BLOCK + BLOCK; y++) for (let x = bx * BLOCK; x < bx * BLOCK + BLOCK; x++) kinds.push(w.items.get(w.cells[cellAt(x, y)]!)!.kind);
