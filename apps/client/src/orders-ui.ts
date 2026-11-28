@@ -51,6 +51,19 @@ export class OrdersUi {
       this.select(-1);
       this.placeTray();
     });
+    // 倉庫の外をクリック（タップ）したら閉じる。ドラッグ（アイテムを運ぶ・盤面を動かす）のときは閉じない
+    let down: { x: number; y: number; inside: boolean } | null = null;
+    const inside = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('#storageTray, #storageBtn, .slot-ghost');
+    window.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, inside: inside(e.target) }; }, true);
+    window.addEventListener('pointerup', (e) => {
+      const d = down;
+      down = null;
+      if (!d || d.inside || $('storageTray').hidden) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
+      $('storageTray').hidden = true;
+      this.select(-1);
+      this.placeTray();
+    }, true);
     const sellSlot = () => {
       if (this.selected >= 0) this.h.sell(this.selected);
       this.select(-1);
