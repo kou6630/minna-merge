@@ -40,7 +40,10 @@ export class Input {
     el.addEventListener('pointercancel', (e) => this.up(e, true));
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.board.zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015));
+      // ホイール1目盛りで約5%ずつ（マウスによって1回の量がちがうので、1回あたりの量に上限を付ける）
+      const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const d = Math.max(-100, Math.min(100, dy));
+      this.board.zoomAt(e.offsetX, e.offsetY, Math.exp(-d * 0.0005));
     }, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
