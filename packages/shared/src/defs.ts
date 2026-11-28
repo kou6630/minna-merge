@@ -195,12 +195,12 @@ export const ENERGY_REGEN_SEC = 60;
  * スタミナ回復: GEM_ENERGY_COST ジェムで +GEM_ENERGY_AMOUNT（上限をこえてもよい）。
  * 試算: ジェムを全部スタミナに使うと、待ち時間がおよそ半分になる値段（それより安いと待ちがなくなる）
  */
-export const GEM_ENERGY_COST = 25;
+export const GEM_ENERGY_COST = 35;
 export const GEM_ENERGY_AMOUNT = 50;
-/** 発生器をすぐ満タンにする: 足りない回数 GEM_PER_CHARGES 回ごとに1ジェム（最低1） */
-export const GEM_PER_CHARGES = 10;
-export function genRefillCost(missing: number): number {
-  return Math.max(1, Math.ceil(missing / GEM_PER_CHARGES));
+/** 発生器をすぐ満タンにする: いつも GEN_REFILL_GEMS ジェム */
+export const GEN_REFILL_GEMS = 5;
+export function genRefillCost(_missing: number): number {
+  return GEN_REFILL_GEMS;
 }
 /** 光るカーソル: ほかの人のカーソルは光っている。ぶつかると2人ともスタミナ。同じ相手とは15分ぶつかれない（ほかの人とはぶつかれる） */
 export const GLOW_COOLDOWN_MS = 15 * 60_000;

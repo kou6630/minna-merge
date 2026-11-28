@@ -18,8 +18,8 @@ function setup() {
   return { w, p, gen };
 }
 
-test('ジェムでスタミナ回復: 25ジェムで +50（満タンをこえてもよい）。足りなければできない', () => {
-  assert.equal(GEM_ENERGY_COST, 25);
+test('ジェムでスタミナ回復: 35ジェムで +50（満タンをこえてもよい）。足りなければできない', () => {
+  assert.equal(GEM_ENERGY_COST, 35);
   assert.equal(GEM_ENERGY_AMOUNT, 50);
   const { w, p } = setup();
   p.gems = 2 * GEM_ENERGY_COST + 5;
@@ -66,8 +66,8 @@ test('ジェムで発生器をすぐ満タン: 使い切ったときだけ（10�
   const other = [...w.items.values()].find((i) => i.owner === 'b')!;
   other.charges = 0;
   assert.equal((apply(w, 'a', { t: 'refillGen', gen: other.id }, T0, rng) as { reason: string }).reason, 'not-yours');
-  assert.equal(genRefillCost(1), 1);
-  assert.equal(genRefillCost(12), 2);
+  assert.equal(genRefillCost(1), 5);
+  assert.equal(genRefillCost(12), 5);
   assert.equal(genRefillCost(50), 5);
 });
 
